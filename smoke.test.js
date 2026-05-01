@@ -41,7 +41,7 @@ function testAutoAssistClimbsStackedPlatforms() {
     `expected to touch every stacked platform, touched ${countTouched(game)}`
   );
   assert.ok(
-    snapshot.player.y < 70 || snapshot.state === STATE.WON,
+    snapshot.player.y + snapshot.player.h < 240 || snapshot.state === STATE.WON,
     `expected to emerge above final platform, y=${snapshot.player.y}, state=${snapshot.state}`
   );
 }
@@ -75,6 +75,27 @@ function testManualQueueConsumesOnSurfacing() {
   );
 }
 
+function testQuickReleaseStillReboundsWhenDepthBecomesValid() {
+  const game = new Game({ levelFactory: createManualQueueTestLevel });
+  game.player.y = 302;
+  game.player.grounded = true;
+  let sawRebound = false;
+
+  runFrames(game, 240, (i, snapshot) => {
+    if (snapshot.state === STATE.REBOUNDING) sawRebound = true;
+    return {
+      [KEYS.PERMEATE]: i === 0
+    };
+  });
+
+  const snapshot = game.snapshot();
+  assert.ok(
+    sawRebound,
+    `expected quick Shift tap to rebound after lower body embedded, final state=${snapshot.state}, y=${snapshot.player.y}`
+  );
+}
+
 testAutoAssistClimbsStackedPlatforms();
 testManualQueueConsumesOnSurfacing();
+testQuickReleaseStillReboundsWhenDepthBecomesValid();
 console.log("Smoke tests passed");

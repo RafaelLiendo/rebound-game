@@ -42,9 +42,9 @@
     materialDamping: 0.88,
     reboundMinDepth: 13,
     reboundAutoDepth: 17,
-    reboundBaseAccel: 4300,
-    reboundDepthAccel: 76,
-    reboundMaxSpeed: 940,
+    reboundBaseAccel: 2150,
+    reboundDepthAccel: 38,
+    reboundMaxSpeed: 470,
     reboundSurfaceCarry: 0.98,
     maxEscapeScan: 420,
     stuckRecoverTime: 0.75
@@ -75,17 +75,17 @@
   function createMainLevel() {
     return {
       spawn: { x: 110, y: 298 },
-      goal: { x: 850, y: 78, w: 48, h: 68 },
+      goal: { x: 850, y: 178, w: 48, h: 68 },
       solids: [
         makeSolid("left-floor", 30, 440, 245, 34, "grass"),
         makeSolid("thin-discovery", 86, 350, 218, 22, "thin"),
         makeSolid("lower-step", 278, 422, 92, 32, "grass"),
         makeSolid("deep-mass", 340, 388, 228, 150, "dense"),
-        makeSolid("catch-ledge", 580, 274, 170, 28, "grass"),
-        makeSolid("chain-one", 688, 392, 158, 30, "dense"),
-        makeSolid("chain-two", 700, 302, 158, 30, "dense"),
-        makeSolid("chain-three", 712, 212, 158, 30, "dense"),
-        makeSolid("final-ledge", 756, 146, 160, 28, "grass"),
+        makeSolid("catch-ledge", 580, 330, 170, 28, "grass"),
+        makeSolid("chain-one", 688, 406, 158, 30, "dense"),
+        makeSolid("chain-two", 700, 354, 158, 30, "dense"),
+        makeSolid("chain-three", 712, 302, 158, 30, "dense"),
+        makeSolid("final-ledge", 756, 246, 160, 28, "grass"),
         makeSolid("stuck-well-left", 170, 214, 28, 136, "dense"),
         makeSolid("stuck-well-right", 282, 214, 28, 136, "dense"),
         makeSolid("stuck-well-cap", 170, 196, 140, 28, "dense"),
@@ -97,13 +97,13 @@
   function createStackTestLevel() {
     return {
       spawn: { x: 150, y: 426 },
-      goal: { x: 152, y: 20, w: 44, h: 54 },
+      goal: { x: 152, y: 166, w: 44, h: 54 },
       solids: [
         makeSolid("stack-0", 96, 448, 150, 28, "dense"),
-        makeSolid("stack-1", 96, 356, 150, 28, "dense"),
-        makeSolid("stack-2", 96, 264, 150, 28, "dense"),
-        makeSolid("stack-3", 96, 172, 150, 28, "dense"),
-        makeSolid("stack-4", 96, 82, 150, 28, "dense")
+        makeSolid("stack-1", 96, 396, 150, 28, "dense"),
+        makeSolid("stack-2", 96, 344, 150, 28, "dense"),
+        makeSolid("stack-3", 96, 292, 150, 28, "dense"),
+        makeSolid("stack-4", 96, 240, 150, 28, "dense")
       ]
     };
   }
@@ -161,6 +161,7 @@
     this.reboundAccel = 0;
     this.queuePermeate = false;
     this.releasePendingSolid = false;
+    this.quickReleaseRebound = false;
     this.autoCooldown = 0;
     this.stuckTimer = 0;
     this.banner = "";
@@ -267,6 +268,7 @@
 
   Game.prototype.startPermeating = function () {
     this.releasePendingSolid = false;
+    this.quickReleaseRebound = this.player.grounded || !this.isClearAt(this.player.x, this.player.y + 4);
     this.queuePermeate = false;
     this.changeState(STATE.PERMEATING);
   };
@@ -276,10 +278,11 @@
     this.reboundDepth = Math.max(this.config.reboundMinDepth, info.depth);
     this.reboundAccel =
       this.config.reboundBaseAccel + this.config.reboundDepthAccel * this.reboundDepth;
-    var initialKick = clamp(170 + this.reboundDepth * 7, 260, 520);
+    var initialKick = clamp(85 + this.reboundDepth * 3.5, 130, 260);
     this.player.vy = Math.min(this.player.vy, -initialKick);
     this.queuePermeate = !!queuedByAssist;
     this.releasePendingSolid = false;
+    this.quickReleaseRebound = false;
     this.autoCooldown = 0.16;
     this.changeState(STATE.REBOUNDING);
   };
@@ -299,6 +302,7 @@
     this.player.vx = 0;
     this.player.vy = 0;
     this.releasePendingSolid = false;
+    this.quickReleaseRebound = false;
     this.queuePermeate = false;
     this.autoCooldown = 0;
     this.changeState(STATE.SOLID);
@@ -414,18 +418,37 @@
 
     if (!this.input[KEYS.PERMEATE] && !this.releasePendingSolid) {
       if (!info.inside) {
-        this.changeState(STATE.SOLID);
-        return;
+        if (this.quickReleaseRebound) {
+          this.releasePendingSolid = true;
+        } else {
+          this.changeState(STATE.SOLID);
+          return;
+        }
       }
-      if (info.lowerEmbedded && info.depth >= this.config.reboundMinDepth) {
+      if (
+        !this.releasePendingSolid &&
+        info.lowerEmbedded &&
+        info.depth >= this.config.reboundMinDepth
+      ) {
         if (this.hasUpwardEscape()) this.startRebound(info, false);
         else this.enterStuck();
         return;
       }
-      this.releasePendingSolid = true;
+      if (!this.releasePendingSolid) this.releasePendingSolid = true;
     }
 
-    if (this.releasePendingSolid && !info.inside) {
+    if (
+      this.releasePendingSolid &&
+      info.lowerEmbedded &&
+      info.depth >= this.config.reboundMinDepth
+    ) {
+      if (this.hasUpwardEscape()) this.startRebound(info, false);
+      else this.enterStuck();
+      return;
+    }
+
+    if (this.releasePendingSolid && !this.quickReleaseRebound && !info.inside) {
+      this.quickReleaseRebound = false;
       this.changeState(STATE.SOLID);
       return;
     }
