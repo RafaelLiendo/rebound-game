@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Permeation Buoyancy Demo</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #050609;
+      color: #f4f7fb;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+    }
+
+    canvas {
+      width: min(100vw, calc(100vh * 16 / 9));
+      height: min(100vh, calc(100vw * 9 / 16));
+      background: #0b111a;
+      image-rendering: pixelated;
+      box-shadow: 0 20px 80px rgba(0, 0, 0, 0.65);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game" width="960" height="540"></canvas>
+  <script>
+  (function () {
+    "use strict";
+
+    // === CONFIG ===
+    var CONFIG = {
+      TILE_SIZE: 32,
+      VIEW_W: 960,
+      VIEW_H: 540,
+      GRAVITY: 0.5,
+      MAX_FALL_SPEED: 12,
+      MOVE_ACCEL: 0.8,
+      MOVE_DECEL: 1.2,
+      MAX_RUN_SPEED: 5,
+      JUMP_VELOCITY: -10,
+      JUMP_CUT_VELOCITY: -3.5,
+      COYOTE_FRAMES: 6,
+      JUMP_BUFFER_FRAMES: 6,
+      REBOUND_AIR_CONTROL: 0.5,
+      REBOUND_STATE_DURATION: 0.4,
+      BUOYANCY_ACCEL: 1.0,
+      BUOYANCY_MAX_SPEED: 18,
+      PERMEATE_DRAG: 0.08,
+      PERMEATE_PULL_ACCEL: 0.3,
+      STUCK_SEARCH_RADIUS: 6,
+      STUCK_DURATION: 0.5,
+      PLAYER_W: 24,
+      PLAYER_H: 40,
+      DT: 1 / 60
+    };
+
+    var TS = CONFIG.TILE_SIZE;
+    var canvas = document.getElementById("game");
+    var ctx = canvas.getContext("2d");
+
+    // === LEVEL DATA ===
+    var LEVEL = [
+      "..............................",
+      "..............................",
+      "..............................",
+      "..............................",
+      "..............................",
+      "..............................",
+      "..............................",
+      "..............................",
+      "..............................",
+      "..............................",
+      "..............................",
+      "..............................",
+      "..............................",
+      "...........................G..",
+      "........................######",
+      "..............................",
+      "..............................",
+      "..............................",
+      "..............................",
+      "........######################",
+      "....##########################",
+      "........######################",
+      "........######################",
+      "....##########################",
+      "..............................",
+      "..............................",
+      "####..........................",
+      "..............................",
+      "..............................",
+      "....###.......................",
+      "..............................",
+      "..............................",
+      "####..........................",
+      "..............................",
+      "..............................",
+      "....###.......................",
+      "..............................",
+      "..............................",
+      "####..........................",
+      "..............................",
+      "..............................",
+      "....###..######...............",
+      "..............................",
+      ".S............................",
+      "##############################"
+    ];
+
+    var ROWS = LEVEL.length;
+    var COLS = LEVEL[0].length;
+    var levelH = ROWS * TS;
+    var levelW = COLS * TS;
+    var tiles = [];
+    var spawnCell = { c: 1, r: 43, x: TS, y: 43 * TS };
+    var goalRect = { x: 27 * TS, y: 13 * TS, w: TS, h: TS };
+
+    function parseLevel() {
+      tiles = [];
+      for (var r = 0; r < ROWS; r++) {
+        tiles[r] = [];
+        for (var c = 0; c < COLS; c++) {
+          var ch = LEVEL[r][c];
+          tiles[r][c] = ch === "#";
+          if (ch === "S") spawnCell = { c: c, r: r, x: c * TS, y: r * TS };
+          if (ch === "G") goalRect = { x: c * TS, y: r * TS, w: TS, h: TS };
+        }
+      }
+    }
+    parseLevel();
+
+    // === INPUT ===
+    var keys = Object.create(null);
+    var keyEdge = Object.create(null);
+    var keyReleased = Object.create(null);
+
+    window.addEventListener("keydown", function (ev) {
+      if (["ArrowLeft", "ArrowRight", "ArrowUp", "Space", "ShiftLeft", "ControlLeft"].indexOf(ev.code) >= 0) {
+        ev.preventDefault();
+      }
+      if (!keys[ev.code]) keyEdge[ev.code] = true;
+      keys[ev.code] = true;
+    });
+
+    window.addEventListener("keyup", function (ev) {
+      if (["ArrowLeft", "ArrowRight", "ArrowUp", "Space", "ShiftLeft", "ControlLeft"].indexOf(ev.code) >= 0) {
+        ev.preventDefault();
+      }
+      keys[ev.code] = false;
+      keyReleased[ev.code] = true;
+    });
+
+    // === PLAYER STATE ===
+    var player = {
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      state: "solid",
+      facing: 1,
+      grounded: false,
+      won: false,
+      coyoteTimer: 0,
+      jumpBufferTimer: 0,
+      reboundAirborneTimer: 0,
+      reboundSurfaced: false,
+      queuedPermeate: false,
+      queuedPermeateSource: null,
+      permeateUntilClear: false,
+      stuckTimer: 0,
+      flashTimer: 0
+    };
+
+    function spawnPlayer() {
+      player.x = spawnCell.x + (TS - CONFIG.PLAYER_W) / 2;
+      player.y = (spawnCell.r + 1) * TS - CONFIG.PLAYER_H;
+      player.vx = 0;
+      player.vy = 0;
+      player.state = "solid";
+      player.facing = 1;
+      player.grounded = false;
+      player.won = false;
+      player.coyoteTimer = 0;
+      player.jumpBufferTimer = 0;
+      player.reboundAirborneTimer = 0;
+      player.reboundSurfaced = false;
+      player.queuedPermeate = false;
+      player.queuedPermeateSource = null;
+      player.permeateUntilClear = false;
+      player.stuckTimer = 0;
+      player.flashTimer = 0;
+      probeGrounded();
+    }
+
+    // === PHYSICS HELPERS ===
+    function clamp(n, lo, hi) {
+      return Math.max(lo, Math.min(hi, n));
+    }
+
+    function approach(n, target, amount) {
+      if (n < target) return Math.min(target, n + amount);
+      if (n > target) return Math.max(target, n - amount);
+      return target;
+    }
+
+    function rectsOverlap(a, b) {
+      return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    }
+
+    function isSolidTile(c, r) {
+      if (c < 0 || c >= COLS || r >= ROWS) return true;
+      if (r < 0) return false;
+      return !!tiles[r][c];
+    }
+
+    function playerRect() {
+      return { x: player.x, y: player.y, w: CONFIG.PLAYER_W, h: CONFIG.PLAYER_H };
+    }
+
+    function bottomHalfRect(rect) {
+      return { x: rect.x, y: rect.y + rect.h / 2, w: rect.w, h: rect.h / 2 };
+    }
+
+    function overlappingSolidTiles(rect) {
+      var out = [];
+      var left = Math.floor(rect.x / TS);
+      var right = Math.floor((rect.x + rect.w - 0.001) / TS);
+      var top = Math.floor(rect.y / TS);
+      var bottom = Math.floor((rect.y + rect.h - 0.001) / TS);
+      for (var r = top; r <= bottom; r++) {
+        for (var c = left; c <= right; c++) {
+          if (isSolidTile(c, r)) out.push({ c: c, r: r });
+        }
+      }
+      return out;
+    }
+
+    function bottomHalfOverlapsSolid(rect) {
+      return overlappingSolidTiles(bottomHalfRect(rect)).length > 0;
+    }
+
+    function laneColumns(rect) {
+      return {
+        left: Math.floor((rect.x + 2) / TS),
+        right: Math.floor((rect.x + rect.w - 2 - 0.001) / TS)
+      };
+    }
+
+    function rowHasSolidInLane(row, lane) {
+      for (var c = lane.left; c <= lane.right; c++) {
+        if (isSolidTile(c, row)) return true;
+      }
+      return false;
+    }
+
+    function firstOverlappedSolidRow(rect) {
+      var lane = laneColumns(rect);
+      var top = Math.floor(rect.y / TS);
+      var bottom = Math.floor((rect.y + rect.h - 0.001) / TS);
+      for (var r = top; r <= bottom; r++) {
+        if (rowHasSolidInLane(r, lane)) return r;
+      }
+      return null;
+    }
+
+    function contiguousMassExtents(rect) {
+      var start = firstOverlappedSolidRow(rect);
+      if (start === null) return null;
+      var lane = laneColumns(rect);
+      var top = start;
+      var bottom = start;
+      while (top - 1 >= 0 && rowHasSolidInLane(top - 1, lane)) top--;
+      while (bottom + 1 < ROWS && rowHasSolidInLane(bottom + 1, lane)) bottom++;
+      return {
+        topRow: top,
+        botRow: bottom,
+        topY: top * TS,
+        botY: (bottom + 1) * TS,
+        centerY: (top * TS + (bottom + 1) * TS) / 2
+      };
+    }
+
+    function countSolidRowsAbove(rect) {
+      var start = firstOverlappedSolidRow(rect);
+      if (start === null) return 0;
+      var lane = laneColumns(rect);
+      var count = 0;
+      for (var r = start; r >= 0; r--) {
+        if (!rowHasSolidInLane(r, lane)) break;
+        count++;
+      }
+      return count;
+    }
+
+    function shouldRebound(rect) {
+      if (!bottomHalfOverlapsSolid(rect)) return { fire: false, stuck: false, rows: 0 };
+      var rows = countSolidRowsAbove(rect);
+      return { fire: true, stuck: rows > CONFIG.STUCK_SEARCH_RADIUS, rows: rows };
+    }
+
+    function setStuck() {
+      player.state = "stuck";
+      player.vx = 0;
+      player.vy = 0;
+      player.stuckTimer = CONFIG.STUCK_DURATION;
+      player.flashTimer = CONFIG.STUCK_DURATION;
+      player.reboundSurfaced = false;
+      player.reboundAirborneTimer = 0;
+      player.queuedPermeate = false;
+      player.queuedPermeateSource = null;
+      player.permeateUntilClear = false;
+    }
+
+    function beginRebound() {
+      player.state = "rebounding";
+      player.vy = 0;
+      player.reboundSurfaced = false;
+      player.reboundAirborneTimer = CONFIG.REBOUND_STATE_DURATION;
+      player.permeateUntilClear = false;
+      player.queuedPermeate = false;
+      player.queuedPermeateSource = null;
+    }
+
+    function consumeReboundExit() {
+      if (player.queuedPermeate) {
+        player.state = "permeating";
+        player.permeateUntilClear = false;
+        player.queuedPermeate = false;
+        player.queuedPermeateSource = null;
+        player.reboundSurfaced = false;
+        return;
+      }
+      player.state = "solid";
+      player.reboundSurfaced = false;
+      player.reboundAirborneTimer = 0;
+      player.queuedPermeate = false;
+      player.queuedPermeateSource = null;
+    }
+
+    function moveAndCollide(dx, dy) {
+      player.grounded = false;
+      moveAxis("x", dx);
+      moveAxis("y", dy);
+    }
+
+    function moveAxis(axis, amount) {
+      var sign = Math.sign(amount);
+      var remaining = Math.abs(amount);
+      while (remaining > 0) {
+        var stepAmount = Math.min(1, remaining) * sign;
+        if (axis === "x") {
+          player.x += stepAmount;
+          var xHits = overlappingSolidTiles(playerRect());
+          if (xHits.length > 0) {
+            if (sign > 0) {
+              var minCol = xHits.reduce(function (m, t) { return Math.min(m, t.c); }, Infinity);
+              player.x = minCol * TS - CONFIG.PLAYER_W;
+            } else {
+              var maxCol = xHits.reduce(function (m, t) { return Math.max(m, t.c); }, -Infinity);
+              player.x = (maxCol + 1) * TS;
+            }
+            player.vx = 0;
+            break;
+          }
+        } else {
+          player.y += stepAmount;
+          var yHits = overlappingSolidTiles(playerRect());
+          if (yHits.length > 0) {
+            if (sign > 0) {
+              var minRow = yHits.reduce(function (m, t) { return Math.min(m, t.r); }, Infinity);
+              player.y = minRow * TS - CONFIG.PLAYER_H;
+            } else {
+              var maxRow = yHits.reduce(function (m, t) { return Math.max(m, t.r); }, -Infinity);
+              player.y = (maxRow + 1) * TS;
+            }
+            if (sign > 0) player.grounded = true;
+            player.vy = 0;
+            break;
+          }
+        }
+        remaining -= Math.abs(stepAmount);
+      }
+      player.x = clamp(player.x, 0, levelW - CONFIG.PLAYER_W);
+      player.y = Math.min(player.y, levelH - CONFIG.PLAYER_H);
+    }
+
+    function probeGrounded() {
+      if (overlappingSolidTiles(playerRect()).length > 0) {
+        player.grounded = false;
+        return false;
+      }
+      var rect = playerRect();
+      var probe = { x: rect.x, y: rect.y + 1, w: rect.w, h: rect.h };
+      player.grounded = overlappingSolidTiles(probe).length > 0;
+      return player.grounded;
+    }
+
+    function placePlayerAtCell(c, r) {
+      player.x = c * TS + (TS - CONFIG.PLAYER_W) / 2;
+      player.y = (r + 1) * TS - CONFIG.PLAYER_H;
+      player.vx = 0;
+      player.vy = 0;
+      player.state = "solid";
+      player.won = false;
+      player.permeateUntilClear = false;
+      player.queuedPermeate = false;
+      player.queuedPermeateSource = null;
+      probeGrounded();
+    }
+
+    function triggerReboundOrStuck(result) {
+      if (result.stuck) {
+        setStuck();
+      } else {
+        beginRebound();
+      }
+    }
+
+    // === STEP (fixed dt) ===
+    function step(dt) {
+      var skipVerticalForce = false;
+
+      keyEdge.Space = !!keyEdge.Space;
+      keyReleased.Space = !!keyReleased.Space;
+      if (keyEdge.Space) player.jumpBufferTimer = CONFIG.JUMP_BUFFER_FRAMES;
+
+      player.coyoteTimer = Math.max(0, player.coyoteTimer - 1);
+      player.jumpBufferTimer = Math.max(0, player.jumpBufferTimer - 1);
+      player.flashTimer = Math.max(0, player.flashTimer - dt);
+
+      if (keyEdge.KeyR) spawnPlayer();
+
+      if (player.state === "stuck") {
+        player.stuckTimer -= dt;
+        if (player.stuckTimer <= 0) spawnPlayer();
+        clearEdges();
+        return;
+      }
+
+      var autoChainActive = !!(keys.ShiftLeft && keys.ControlLeft);
+      if (!autoChainActive && player.queuedPermeateSource === "auto") {
+        player.queuedPermeate = false;
+        player.queuedPermeateSource = null;
+      }
+
+      if (keyEdge.ShiftLeft && player.permeateUntilClear) {
+        player.permeateUntilClear = false;
+      }
+
+      if (player.state === "solid" && keyEdge.ShiftLeft) {
+        player.state = "permeating";
+        player.permeateUntilClear = false;
+      }
+
+      if (player.state === "rebounding") {
+        if (keyEdge.ShiftLeft) {
+          player.queuedPermeate = true;
+          player.queuedPermeateSource = "manual";
+        }
+        if (autoChainActive) {
+          player.queuedPermeate = true;
+          player.queuedPermeateSource = "auto";
+        }
+        if (player.queuedPermeateSource === "manual" && keyReleased.ShiftLeft) {
+          player.queuedPermeate = false;
+          player.queuedPermeateSource = null;
+        }
+        if (player.queuedPermeateSource === "auto" && (!keys.ShiftLeft || !keys.ControlLeft)) {
+          player.queuedPermeate = false;
+          player.queuedPermeateSource = null;
+        }
+      }
+
+      if (player.state === "permeating") {
+        var rect = playerRect();
+        var fullOverlap = overlappingSolidTiles(rect).length > 0;
+        var rebound = shouldRebound(rect);
+        if (autoChainActive && rebound.fire) {
+          triggerReboundOrStuck(rebound);
+          if (player.state === "rebounding") {
+            player.queuedPermeate = true;
+            player.queuedPermeateSource = "auto";
+          }
+          skipVerticalForce = true;
+        } else if (keyReleased.ShiftLeft && !player.permeateUntilClear) {
+          if (rebound.fire) {
+            triggerReboundOrStuck(rebound);
+            skipVerticalForce = true;
+          } else if (fullOverlap) {
+            player.permeateUntilClear = true;
+          } else {
+            player.state = "solid";
+          }
+        }
+      }
+
+      if (player.state === "permeating" && player.permeateUntilClear && overlappingSolidTiles(playerRect()).length === 0) {
+        player.permeateUntilClear = false;
+        player.state = "solid";
+      }
+
+      var moveInput = (keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0);
+      if (moveInput !== 0) player.facing = moveInput;
+      var accel = CONFIG.MOVE_ACCEL * (player.state === "rebounding" ? CONFIG.REBOUND_AIR_CONTROL : 1);
+      if (moveInput !== 0) {
+        player.vx += moveInput * accel;
+        if (player.state !== "rebounding") player.vx = clamp(player.vx, -CONFIG.MAX_RUN_SPEED, CONFIG.MAX_RUN_SPEED);
+      } else {
+        player.vx = approach(player.vx, 0, CONFIG.MOVE_DECEL);
+      }
+
+      var canJump = (player.state === "solid" || (player.state === "rebounding" && player.reboundSurfaced)) &&
+        (player.grounded || player.coyoteTimer > 0);
+      if (player.jumpBufferTimer > 0 && canJump) {
+        player.vy = CONFIG.JUMP_VELOCITY;
+        player.jumpBufferTimer = 0;
+        player.coyoteTimer = 0;
+        player.grounded = false;
+        skipVerticalForce = true;
+      }
+      if (keyReleased.Space && player.vy < CONFIG.JUMP_CUT_VELOCITY) {
+        player.vy = CONFIG.JUMP_CUT_VELOCITY;
+        skipVerticalForce = true;
+      }
+
+      var embedded = overlappingSolidTiles(playerRect()).length > 0;
+      if (!skipVerticalForce) {
+        if (player.state === "permeating") {
+          if (embedded && !player.permeateUntilClear) {
+            // Permeation is viscous, not free-fall: drag bleeds off speed and a
+            // gentle center-pull nudges the player toward the contiguous mass's
+            // vertical midpoint. The latch deliberately skips this section so a
+            // top-half-only release can drift fully clear instead of being re-caught.
+            var ext = contiguousMassExtents(playerRect());
+            player.vy *= (1 - CONFIG.PERMEATE_DRAG);
+            if (ext) {
+              var center = player.y + CONFIG.PLAYER_H / 2;
+              if (Math.abs(ext.centerY - center) > 2) {
+                player.vy += Math.sign(ext.centerY - center) * CONFIG.PERMEATE_PULL_ACCEL;
+              }
+            }
+            player.vy = clamp(player.vy, -CONFIG.MAX_FALL_SPEED, CONFIG.MAX_FALL_SPEED);
+          } else {
+            player.vy = Math.min(CONFIG.MAX_FALL_SPEED, player.vy + CONFIG.GRAVITY);
+          }
+        } else if (player.state === "rebounding") {
+          if (embedded && !player.reboundSurfaced) {
+            // Buoyancy is accumulated while still inside the mass. Collision is
+            // intentionally disabled in the buoyant phase below, otherwise every
+            // interior tile row would cancel the ascent before the player surfaces.
+            player.vy = Math.max(-CONFIG.BUOYANCY_MAX_SPEED, player.vy - CONFIG.BUOYANCY_ACCEL);
+          } else {
+            if (!player.reboundSurfaced) {
+              player.reboundSurfaced = true;
+              player.reboundAirborneTimer = CONFIG.REBOUND_STATE_DURATION;
+            }
+            player.vy = Math.min(CONFIG.MAX_FALL_SPEED, player.vy + CONFIG.GRAVITY);
+            player.reboundAirborneTimer -= dt;
+          }
+        } else {
+          player.vy = Math.min(CONFIG.MAX_FALL_SPEED, player.vy + CONFIG.GRAVITY);
+        }
+      }
+
+      embedded = overlappingSolidTiles(playerRect()).length > 0;
+      if (player.state === "permeating" || (player.state === "rebounding" && embedded && !player.reboundSurfaced)) {
+        player.x += player.vx;
+        player.y += player.vy;
+        player.x = clamp(player.x, 0, levelW - CONFIG.PLAYER_W);
+        player.y = clamp(player.y, -levelH, levelH - CONFIG.PLAYER_H);
+        player.grounded = false;
+      } else {
+        moveAndCollide(player.vx, player.vy);
+      }
+
+      probeGrounded();
+      if (player.grounded) player.coyoteTimer = CONFIG.COYOTE_FRAMES;
+
+      if (player.state === "rebounding") {
+        var nowEmbedded = overlappingSolidTiles(playerRect()).length > 0;
+        if (!nowEmbedded && !player.reboundSurfaced) {
+          player.reboundSurfaced = true;
+          player.reboundAirborneTimer = CONFIG.REBOUND_STATE_DURATION;
+        }
+        if (player.reboundSurfaced && (player.grounded || player.reboundAirborneTimer <= 0)) {
+          consumeReboundExit();
+        }
+      }
+
+      if (rectsOverlap(playerRect(), goalRect)) {
+        player.state = "won";
+        player.won = true;
+      }
+
+      clearEdges();
+    }
+
+    function clearEdges() {
+      for (var k in keyEdge) keyEdge[k] = false;
+      for (var r in keyReleased) keyReleased[r] = false;
+    }
+
+    // === RENDER ===
+    var cameraY = 0;
+
+    function draw() {
+      cameraY = clamp(player.y + CONFIG.PLAYER_H / 2 - CONFIG.VIEW_H / 2, 0, levelH - CONFIG.VIEW_H);
+      ctx.clearRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
+      ctx.fillStyle = "#0b111a";
+      ctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
+
+      ctx.save();
+      ctx.translate(0, -Math.round(cameraY));
+      drawBackground();
+      drawTiles();
+      drawGoal();
+      drawPlayer();
+      ctx.restore();
+
+      drawHud();
+      if (player.won) drawWin();
+    }
+
+    function drawBackground() {
+      ctx.fillStyle = "#101827";
+      ctx.fillRect(0, 0, levelW, levelH);
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.08)";
+      ctx.lineWidth = 1;
+      for (var y = 0; y <= levelH; y += TS) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(levelW, y);
+        ctx.stroke();
+      }
+    }
+
+    function drawTiles() {
+      for (var r = 0; r < ROWS; r++) {
+        for (var c = 0; c < COLS; c++) {
+          if (!tiles[r][c]) continue;
+          var x = c * TS;
+          var y = r * TS;
+          ctx.fillStyle = "#263142";
+          ctx.fillRect(x, y, TS, TS);
+          ctx.fillStyle = "#334256";
+          ctx.fillRect(x, y, TS, 5);
+          ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
+          ctx.fillRect(x + 2, y + 2, TS - 4, TS - 4);
+        }
+      }
+    }
+
+    function drawGoal() {
+      ctx.fillStyle = "#facc15";
+      ctx.fillRect(goalRect.x + 8, goalRect.y + 4, 14, 24);
+      ctx.fillStyle = "#f97316";
+      ctx.fillRect(goalRect.x + 12, goalRect.y + 28, 4, 4);
+    }
+
+    function drawPlayer() {
+      var pulse = 0.5 + 0.5 * Math.sin(performance.now() / 110);
+      var alpha = player.state === "permeating" ? 0.4 : 1;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = player.won ? "#fde047" : "#eef6ff";
+      ctx.fillRect(player.x, player.y, CONFIG.PLAYER_W, CONFIG.PLAYER_H);
+      ctx.restore();
+
+      ctx.lineWidth = 3;
+      if (player.state === "permeating") {
+        ctx.strokeStyle = "rgba(34, 211, 238, " + (0.45 + pulse * 0.45).toFixed(3) + ")";
+      } else if (player.state === "rebounding") {
+        ctx.strokeStyle = "#fb923c";
+      } else if (player.state === "stuck" || player.flashTimer > 0) {
+        ctx.strokeStyle = "#ef4444";
+      } else if (player.won) {
+        ctx.strokeStyle = "#facc15";
+      } else {
+        ctx.strokeStyle = "#dbeafe";
+      }
+      ctx.strokeRect(player.x - 1, player.y - 1, CONFIG.PLAYER_W + 2, CONFIG.PLAYER_H + 2);
+
+      ctx.fillStyle = "#0f172a";
+      var eyeX = player.facing > 0 ? player.x + CONFIG.PLAYER_W - 8 : player.x + 5;
+      ctx.fillRect(eyeX, player.y + 10, 4, 4);
+    }
+
+    function drawHud() {
+      var stateLabel = player.won ? "Won" : player.state.charAt(0).toUpperCase() + player.state.slice(1);
+      var stateColor = {
+        solid: "#f8fafc",
+        permeating: "#22d3ee",
+        rebounding: "#fb923c",
+        stuck: "#ef4444",
+        won: "#facc15"
+      }[player.won ? "won" : player.state];
+
+      ctx.fillStyle = "rgba(5, 6, 9, 0.72)";
+      ctx.fillRect(16, 16, 360, 96);
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.28)";
+      ctx.strokeRect(16.5, 16.5, 360, 96);
+      ctx.fillStyle = stateColor;
+      ctx.font = "700 18px ui-sans-serif, system-ui";
+      ctx.fillText(stateLabel, 32, 46);
+      ctx.fillStyle = "#cbd5e1";
+      ctx.font = "13px ui-sans-serif, system-ui";
+      ctx.fillText("Arrows/A-D move  Space jump  Shift permeate", 32, 72);
+      ctx.fillText("Left Ctrl + Shift auto-chain  R reset", 32, 94);
+      if (player.queuedPermeate) {
+        ctx.fillStyle = "#38bdf8";
+        ctx.fillText("Queued " + player.queuedPermeateSource + " permeate", 248, 46);
+      }
+    }
+
+    function drawWin() {
+      ctx.fillStyle = "rgba(5, 6, 9, 0.68)";
+      ctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
+      ctx.fillStyle = "#facc15";
+      ctx.font = "800 44px ui-sans-serif, system-ui";
+      ctx.textAlign = "center";
+      ctx.fillText("Level Complete", CONFIG.VIEW_W / 2, CONFIG.VIEW_H / 2 - 12);
+      ctx.fillStyle = "#f8fafc";
+      ctx.font = "18px ui-sans-serif, system-ui";
+      ctx.fillText("Press R to play again", CONFIG.VIEW_W / 2, CONFIG.VIEW_H / 2 + 30);
+      ctx.textAlign = "left";
+    }
+
+    // === LOOP ===
+    var lastTime = performance.now();
+    var accumulator = 0;
+
+    function loop(now) {
+      accumulator += Math.min(0.25, (now - lastTime) / 1000);
+      lastTime = now;
+      while (accumulator >= CONFIG.DT) {
+        step(CONFIG.DT);
+        accumulator -= CONFIG.DT;
+      }
+      renderOnly();
+      requestAnimationFrame(loop);
+    }
+
+    function renderOnly() {
+      cameraY = clamp(player.y + CONFIG.PLAYER_H / 2 - CONFIG.VIEW_H / 2, 0, levelH - CONFIG.VIEW_H);
+      ctx.clearRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
+      ctx.fillStyle = "#0b111a";
+      ctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
+      ctx.save();
+      ctx.translate(0, -Math.round(cameraY));
+      drawBackground();
+      drawTiles();
+      drawGoal();
+      drawPlayer();
+      ctx.restore();
+      drawHud();
+      if (player.won) drawWin();
+    }
+
+    spawnPlayer();
+    requestAnimationFrame(loop);
+
+    window.gameInternals = {
+      CONFIG: CONFIG,
+      LEVEL: LEVEL,
+      tiles: tiles,
+      player: player,
+      keys: keys,
+      keyEdge: keyEdge,
+      keyReleased: keyReleased,
+      spawnCell: spawnCell,
+      goalRect: goalRect,
+      parseLevel: parseLevel,
+      spawnPlayer: spawnPlayer,
+      step: step,
+      clearEdges: clearEdges,
+      isSolidTile: isSolidTile,
+      playerRect: playerRect,
+      bottomHalfRect: bottomHalfRect,
+      overlappingSolidTiles: overlappingSolidTiles,
+      bottomHalfOverlapsSolid: bottomHalfOverlapsSolid,
+      contiguousMassExtents: contiguousMassExtents,
+      countSolidRowsAbove: countSolidRowsAbove,
+      shouldRebound: shouldRebound,
+      moveAndCollide: moveAndCollide,
+      probeGrounded: probeGrounded,
+      placePlayerAtCell: placePlayerAtCell,
+      beginRebound: beginRebound
+    };
+  }());
+  </script>
+</body>
+</html>
