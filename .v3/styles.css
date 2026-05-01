@@ -1,0 +1,141 @@
+:root {
+  color-scheme: dark;
+  --ink: #f4f0df;
+  --muted: #b8c7b8;
+  --panel: rgba(14, 19, 25, 0.76);
+  --line: rgba(244, 240, 223, 0.22);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 28% 18%, rgba(220, 96, 66, 0.24), transparent 32%),
+    linear-gradient(145deg, #10161d 0%, #172419 48%, #101820 100%);
+  color: var(--ink);
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+}
+
+.shell {
+  position: relative;
+  width: min(100vw - 36px, 1180px);
+  aspect-ratio: 16 / 9;
+  min-height: 280px;
+  max-height: calc(100vh - 36px);
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #121820;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.42);
+}
+
+.hud {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 16px;
+  display: grid;
+  grid-template-columns: minmax(170px, 360px) minmax(130px, 260px);
+  gap: 12px;
+  align-items: center;
+  pointer-events: none;
+}
+
+.status {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+}
+
+#stateLabel {
+  flex: 0 0 auto;
+  min-width: 86px;
+  color: #111820;
+  border-radius: 6px;
+  background: #f0c85f;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+#messageLabel {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meter {
+  height: 18px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px) 0 0 / 32px 100%,
+    rgba(14, 19, 25, 0.8);
+  backdrop-filter: blur(10px);
+}
+
+#pressureFill {
+  display: block;
+  width: 0%;
+  height: 100%;
+  border-radius: 7px;
+  background: linear-gradient(90deg, #68d391, #f0c85f 65%, #e85f5c);
+  transition: width 90ms linear;
+}
+
+@media (max-width: 720px) {
+  body {
+    padding: 10px;
+  }
+
+  .shell {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+  }
+
+  .hud {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  #messageLabel {
+    font-size: 12px;
+  }
+}
