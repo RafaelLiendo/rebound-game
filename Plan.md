@@ -1,297 +1,177 @@
-# Plan: Permeation Platformer
+# Plan: Permeation Buoyancy Platformer
 
 ## Intent
 
-Create a movement-focused platform game built around the feeling of becoming
-untouchable, passing through danger and matter, then snapping back into the
-world with confidence and momentum.
+Create a compact 2D platformer centered on the feeling of becoming intangible,
+passing through solid matter, and rebounding upward with buoyant force. The core
+fantasy is not teleportation or instant ejection; it should feel like diving
+into a dense medium and being pushed back toward open air.
 
-The fantasy is inspired by Mirio Togata and his Permeation quirk: the player
-can phase through solid things, but doing so should feel deliberate, risky, and
-skillful rather than like simple invisibility or flight. The heart of the game
-is learning when to disappear from the physical world, when to return, and how
-to use that return as movement.
+The experience should teach the mechanic through play. The player first
+discovers that holding Permeate lets them slip through a thin surface, then
+learns that releasing Permeate while meaningfully embedded in solid matter can
+turn depth into upward launch height. A later rhythm emerges from chaining
+permeation and rebound together.
 
-The game should feel:
+This plan intentionally avoids technical architecture, tuning constants, exact
+geometry, and implementation details. It focuses on mechanics, player intent,
+state flow, controls, and behavior validation.
 
-- Bold and physical, with quick commitments and rewarding recoveries.
-- Readable, so the player understands why a phase, rebound, miss, or failure
-  happened.
-- Expressive, allowing small differences in timing to produce different arcs,
-  escapes, and landings.
-- Heroic without being effortless: the player is powerful, but their timing and
-  positioning matter.
+## Mechanics Feel
 
-## Core Fantasy
-
-Mirio's Permeation is powerful because it has consequences. When intangible, he
-can pass through almost anything, but he must manage his senses, position, and
-return carefully. The game should borrow that spirit instead of copying only the
-surface idea of walking through walls.
-
-The player should feel as if they are:
-
-- Slipping out of contact with the world.
-- Letting gravity, momentum, and terrain carry them somewhere they could not
-  normally reach.
-- Reappearing with impact, direction, and renewed agency.
-- Threading through obstacles by trusting timing rather than brute force.
-
-The mechanic should create dramatic reversals: falling into danger can become a
-launch, a blocked path can become a route, and a missed return can become a tense
-scramble.
-
-## Player Verbs
-
-The player can:
-
-- Move along the ground.
-- Jump and shape their jump through timing.
-- Enter permeation.
-- Continue moving while permeating.
-- Release permeation to attempt a return to solidity.
-- Rebound when returning from within solid matter.
-- Recover after surfacing, landing, or failing to return safely.
-
-These verbs should combine naturally. The best moments should come from chaining
-ordinary platforming with permeation timing, not from pausing to solve a purely
-abstract puzzle.
-
-## Permeation Feel
-
-Permeation should feel like a dangerous permission slip. While active, the player
-is allowed to pass through spaces that are normally forbidden, but they lose the
-comfort of ordinary collision. The world should continue to matter through
-movement, pressure, visibility, audio, animation, or other feedback.
-
-Entering permeation should be immediate enough to feel responsive. Staying in
-permeation should feel unstable enough that the player wants to choose a return
-moment. Returning should feel clean when the player has made a good choice and
-alarming when they have not.
-
-## Rebound Feel
-
-Rebound is the signature reward for using permeation with confidence. When the
-player returns while still meaningfully inside solid matter, the world should
-push them back out with a buoyant, upward sense of force.
-
-The rebound should not feel like a generic jump. It should feel like the result
-of the world rejecting the player back into physical space. The player should be
-able to anticipate it, aim with movement, and use it to reach places that normal
-movement cannot.
-
-A good rebound should feel:
-
-- Earned by entering and releasing at the right moment.
-- Stronger in perception when the player has committed deeper.
-- Legible through animation, sound, camera response, and trajectory.
-- Controllable after exit, so the player remains responsible for the landing.
-
-## Failure Feel
-
-Failure should be clear, quick to understand, and easy to retry from. The player
-should rarely wonder whether the game misunderstood them. When a return fails,
-the game should communicate whether the player released too early, too late, in
-an unsafe place, or without enough commitment.
-
-The tone should stay encouraging. Failure is part of learning a strange power.
-The game should invite another attempt rather than punish experimentation.
-
-## State Machine
-
-The state machine describes game feel and rule intent only. Names may change
-during implementation.
-
-### Grounded
-
-The player is solid, standing on stable terrain, and has full ordinary movement.
-
-Transitions:
-
-- To `Airborne` when the player leaves the ground.
-- To `Permeating` when the player activates permeation.
-- To `Recovery` after a heavy landing or scripted lockout, if the final game
-  wants brief expressive follow-through.
-
-### Airborne
-
-The player is solid and moving through open space without ground support.
-
-Transitions:
-
-- To `Grounded` when the player lands cleanly.
-- To `Permeating` when the player activates permeation.
-- To `Recovery` after a hard impact, hazard interaction, or other interrupt.
-
-### Permeating
-
-The player is intangible. Solid terrain no longer behaves as a normal barrier,
-but the player is still subject to movement intent, momentum, and the risks of
-being inside the world.
-
-Transitions:
-
-- To `Surfacing` when the player releases permeation from a place where a clean
-  return is possible without a rebound.
-- To `Rebounding` when the player releases permeation while meaningfully embedded
-  in solid matter.
-- To `Stuck` when the player cannot safely resolve back into the world.
-- To `Airborne` or `Grounded` when permeation ends in open space, depending on
-  whether the player has support.
-
-### Surfacing
-
-The player is returning from intangibility without a launch. This is the quiet
-version of reappearing: useful for slipping through a floor, wall, obstacle, or
-hazard and becoming solid again once clear.
-
-Transitions:
-
-- To `Grounded` when the player becomes solid with ground support.
-- To `Airborne` when the player becomes solid in open space.
-- To `Permeating` if the player chooses to remain intangible before the return
-  fully resolves, if that style of cancel is desired.
-- To `Stuck` if the return cannot be completed safely.
-
-### Rebounding
-
-The player is being forced out of solid matter after returning from permeation.
-This is the dramatic, buoyant ejection state. It should preserve the sense that
-the player caused the launch through timing rather than receiving an automatic
-scripted boost.
-
-Transitions:
-
-- To `Airborne` when the player exits solid matter and remains unsupported.
-- To `Grounded` if the rebound resolves directly onto stable terrain.
-- To `Permeating` if the player reactivates or chains permeation, if chaining is
-  part of the final feel.
-- To `Stuck` if the rebound cannot find a safe way out.
-
-### Stuck
-
-The player attempted to resolve solidity in a place where the game cannot fairly
-place them. This is a failure or rescue state, depending on the intended tone.
-
-Transitions:
-
-- To `Recovery` after the game communicates the failure and moves the player to a
-  safe retry position.
-- To `Permeating` if the design allows emergency continuation instead of an
-  immediate reset.
-- To `Grounded` or `Airborne` after a retry, rescue, checkpoint, or assist.
-
-### Recovery
-
-The player is briefly regaining control after a failure, landing, rescue, or
-dramatic return. This state is optional in spirit: it exists to support clarity,
-animation, and pacing, not to take control away unnecessarily.
-
-Transitions:
-
-- To `Grounded` when the player is ready and supported.
-- To `Airborne` when the player is ready and unsupported.
-- To `Permeating` if the game allows immediate defensive phasing.
+- Movement should feel responsive, readable, and expressive enough for platform
+  play: quick horizontal control, forgiving jumps, and variable jump height.
+- Permeation should make solid matter feel viscous rather than empty. The
+  player should slow down inside it and feel gently drawn into the mass instead
+  of simply falling at normal speed.
+- Rebound should build from the player's embedded depth. The player should begin
+  the rebound calmly, accelerate while still inside the solid mass, then surface
+  with enough upward momentum to reach otherwise inaccessible spaces.
+- A shallow release with the lower body embedded should produce a smaller pop.
+  A deeper release should produce a stronger launch.
+- Releasing while only the upper body is still inside solid matter should not
+  trigger a rebound. The player should continue clearing the material and return
+  to normal once fully out.
+- If the player attempts to rebound from a place with no plausible upward escape,
+  the game should communicate that they are stuck and recover them cleanly.
+- Chained permeation should reward timing: release to rebound, then re-enter
+  permeation as soon as the body surfaces.
+- Auto chain should preserve the same mechanic while reducing execution burden:
+  holding the assist with Permeate should alternate between rebound and
+  permeation whenever the current situation supports it.
 
 ## Controls
 
-Controls should be described as actions first, with bindings chosen later for
-the target platform and accessibility needs.
+- Move: Left/Right arrows or A/D.
+- Jump: Space.
+- Permeate: Shift.
+- Auto Rebound/Permeate assist: hold Left Ctrl while holding Shift.
+- Reset: R.
 
-- Move: steer the character horizontally and influence airborne drift.
-- Jump: leave the ground, shape jump height, and support expressive platforming.
-- Permeate: hold, press, or toggle into intangibility depending on the final
-  control feel.
-- Release Permeation: attempt to return to solidity, potentially triggering a
-  rebound.
-- Aim or Directional Intent: influence drift, exit planning, or advanced
-  permeation routes if the game grows beyond vertical rebounds.
-- Restart or Retry: quickly return to the last fair attempt point.
-- Pause: stop play and expose options, assist settings, and control remapping.
+## State Machine
 
-The control scheme should prioritize trust. The player should always feel that
-permeation started when requested, ended when requested, and produced a result
-that follows from the visible situation.
+### States
 
-## Teaching Ideas
+- **Solid**: The default physical state. The player collides with terrain,
+  moves normally, jumps, lands, and can reach the goal.
+- **Permeating**: The player is intangible to terrain and can pass through solid
+  matter. While inside solid matter, movement should feel resisted and pulled by
+  the material.
+- **Rebounding**: The player has released or auto-triggered from a valid embedded
+  position and is being pushed upward through the material.
+- **Stuck**: The player attempted to rebound where an upward escape is not
+  available. The game briefly communicates failure, then returns the player to a
+  recoverable position.
+- **Won**: The player has reached the goal.
 
-The game should teach through spaces that make the desired action feel natural.
+### Transitions
 
-Possible teaching beats:
+- **Start or reset -> Solid**: The player begins in a recoverable, playable
+  position.
+- **Solid -> Permeating**: The player presses Permeate.
+- **Permeating -> Solid**: The player releases Permeate while clear of solid
+  matter.
+- **Permeating -> Permeating until clear -> Solid**: The player releases while
+  only the upper body remains inside solid matter. No rebound fires; the player
+  continues clearing the material, then returns to Solid.
+- **Permeating -> Rebounding**: The player releases Permeate, or the assist
+  triggers, while the lower body is embedded in solid matter and an upward exit
+  is available.
+- **Permeating -> Stuck**: The player tries to rebound from an embedded position
+  where upward escape is blocked.
+- **Rebounding -> Solid**: The player surfaces from the solid mass with no
+  queued permeation.
+- **Rebounding -> Permeating**: The player surfaces while a manual chain or auto
+  chain is queued.
+- **Rebounding -> Stuck**: The rebound cannot resolve because the player remains
+  trapped in solid matter.
+- **Stuck -> Solid**: Recovery returns the player to a playable position.
+- **Any active state -> Won**: The player reaches the goal.
+- **Won -> Solid**: Reset starts the level again.
 
-- A safe place to phase through a simple barrier.
-- A low-risk fall that demonstrates permeability without punishment.
-- A rebound setup that makes the player feel the launch as a discovery.
-- A landing challenge that asks the player to steer after rebounding.
-- A timing challenge where releasing too early or too late produces readable
-  outcomes.
-- A route where ordinary movement and permeation alternate rhythmically.
+## Puzzle Beats
 
-Each lesson should introduce one new pressure at a time: timing, depth,
-direction, hazard avoidance, route reading, or recovery.
+### Thin-Surface Discovery
 
-## Level Feel
+The player encounters a thin solid surface that can be stood on normally. Holding
+Permeate lets the player sink through it. This beat communicates that
+permeation changes the relationship with terrain and that solid matter has a
+distinct, slower feel while the player is inside it.
 
-Levels should be built around anticipation and release. The player sees a place
-they cannot reach, identifies a mass or obstacle they can exploit, commits to
-permeation, then returns with momentum.
+### Deep-Dive Rebound
 
-Good spaces might include:
+The player reaches a thicker mass of terrain. A normal jump should not be enough
+to reach the next meaningful ledge. The player dives into the mass, releases
+from a valid embedded position, rebounds upward, and steers after surfacing to
+land in a new area.
 
-- Thick masses that invite deep commitment and strong rebound.
-- Thin barriers that teach clean pass-through movement.
-- Offset ledges that reward steering after launch.
-- Hazards that can be bypassed only by trusting intangibility.
-- Safe reset pockets that keep experimentation flowing.
-- Optional mastery routes where skilled players chain permeation and rebound.
+### Chain Rhythm
 
-The best layouts should make the player feel clever and brave at the same time.
+Once rebound is understood, the player can press Permeate again during the
+rebound so the next permeation begins immediately on surfacing. With assist
+held, the game should automate this rhythm while the player maintains the input
+and the terrain keeps presenting valid rebound opportunities.
 
-## Feedback
+## Behavior Validation
 
-The player needs strong feedback because the central mechanic temporarily breaks
-the usual promise of collision.
+These validations describe mechanics behavior only. They are derived from the
+current smoke test harness and playable page, but intentionally avoid technical
+implementation details and fixed tuning values.
 
-Feedback should clarify:
+### Automated Smoke Coverage
 
-- Whether the player is solid or permeating.
-- Whether the player is safely inside, partly inside, or clear of matter.
-- Whether releasing now will likely surface, rebound, or fail.
-- When a rebound begins, peaks, and resolves.
-- Where control returns after a dramatic state change.
+- **Auto assist climbs stacked platforms**: In a controlled vertical stack of
+  separated platforms, holding Permeate and the assist should repeatedly chain
+  rebound into permeation. The player should interact with every platform in the
+  stack and emerge above the final one without needing jump, key releases, or
+  extra inputs.
+- **Manual queue consumes on surfacing**: After a rebound begins, pressing and
+  holding Permeate again should queue the next permeation. On the exact moment
+  the player fully surfaces from solid matter, the queued permeation should take
+  over immediately instead of briefly returning to Solid.
 
-Feedback can come from animation, silhouette treatment, particles, sound,
-controller feel, camera motion, environment response, or interface hints. The
-specific presentation should serve readability and feel, not decoration.
+### Playable Mechanics Checks
 
-## Design Principles
+- **Boot and reset**: The game should start and reset into a playable Solid
+  state with no immediate terrain overlap.
+- **Basic movement**: Left/right movement, jump, short-hop behavior, landing,
+  and ledge forgiveness should feel consistent and controllable.
+- **Thin-surface permeation**: Holding Permeate on a thin surface should carry
+  the player through it with a viscous, slowed feel rather than normal free-fall.
+- **Release in open air**: Releasing Permeate while clear of solid matter should
+  return the player to Solid without rebound.
+- **Upper-body-only release**: Releasing while only the upper body remains in
+  solid matter should keep the player permeating until fully clear, then return
+  to Solid.
+- **Lower-body embedded release**: Releasing while the lower body is embedded
+  should trigger Rebounding, beginning from a calm moment before the buoyant
+  rise builds.
+- **Deep rebound**: A deeper valid release should produce enough upward momentum
+  to reach a ledge that normal jumping cannot reach, while still allowing
+  steering after surfacing.
+- **Stuck recovery**: Rebounding into a blocked upward path should enter Stuck,
+  communicate the failure, and recover cleanly.
+- **Manual chain**: Re-pressing Permeate during Rebounding should queue the next
+  permeation and consume it immediately on surfacing.
+- **Auto chain**: Holding Permeate and assist should repeatedly alternate
+  between Permeating and Rebounding while valid terrain supports the rhythm.
+- **Assist cancellation**: Releasing either Permeate or assist should stop the
+  auto chain and return to the normal state flow.
+- **Goal completion**: Touching the goal should enter Won, show completion, and
+  allow reset.
 
-- Permeation is a commitment, not a passive shield.
-- Rebound is a movement reward, not a cutscene.
-- Failure should explain the rule without scolding the player.
-- The player should retain agency as often as readability allows.
-- The power should feel strange at first, then intuitive through practice.
-- Mirio's inspiration should live in confidence, timing, and risk management,
-  not just in passing through walls.
+## Presentation Cues
 
-## Open Questions
-
-These are intentionally left undecided until prototyping reveals the right feel.
-
-- Should permeation be held, toggled, buffered, or support multiple input modes?
-- How much control should the player retain while fully inside matter?
-- Should rebound always favor upward exit, or can later abilities support other
-  directions?
-- Should being stuck cause a reset, an assist rescue, a short damage state, or a
-  chance to continue permeating?
-- How readable should predicted outcomes be before release?
-- How much should advanced players be able to chain rebounds and permeation?
+- The current state should be readable at a glance.
+- Permeating should look distinct from Solid and imply intangibility.
+- Rebounding should look energetic and clearly different from ordinary jumping.
+- Stuck and Won should be unmistakable without interrupting the player's
+  understanding of the mechanic.
 
 ## Success Criteria
 
-The prototype or finished game is successful if players can describe the mechanic
-in their own words after a short time, intentionally use permeation to solve
-movement problems, and feel that spectacular rebounds came from their decisions.
-
-The ideal reaction is not only "I went through the wall." It is "I knew when to
-let go."
+The demo succeeds when the player can understand the mechanic through direct
+experimentation, use depth to create rebound height, steer out of the rebound
+into a landing, and optionally discover the chained rhythm. The validation
+scenarios above should pass without relying on a particular implementation
+strategy or fixed numeric tuning.
