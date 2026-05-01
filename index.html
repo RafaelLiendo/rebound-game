@@ -51,7 +51,7 @@
       JUMP_BUFFER_FRAMES: 6,
       REBOUND_AIR_CONTROL: 0.5,
       REBOUND_STATE_DURATION: 0.4,
-      BUOYANCY_ACCEL: 1.0,
+      BUOYANCY_ACCEL: 1.2,
       BUOYANCY_MAX_SPEED: 18,
       PERMEATE_DRAG: 0.08,
       PERMEATE_PULL_ACCEL: 0.3,
@@ -590,7 +590,7 @@
           player.reboundSurfaced = true;
           player.reboundAirborneTimer = CONFIG.REBOUND_STATE_DURATION;
         }
-        if (player.reboundSurfaced && (player.grounded || player.reboundAirborneTimer <= 0)) {
+        if (player.reboundSurfaced) {
           consumeReboundExit();
         }
       }

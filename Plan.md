@@ -71,9 +71,11 @@ for a follow-up extension.
    itself does not apply buoyancy — `vy` stays at 0 for one step (see §12).
    Vertical speed is clamped at `BUOYANCY_MAX_SPEED` so the player doesn't
    accelerate forever in very deep blocks. The moment the player's rect no
-   longer overlaps any solid (i.e. they have surfaced), the buoyancy force ends
-   and gravity resumes; the velocity they had at the surface carries them up
-   ballistically and they fall back under normal physics.
+   longer overlaps any solid (i.e. they have surfaced), `rebounding` ends on
+   that same fixed step: a queued Permeation is consumed immediately, otherwise
+   the player becomes `solid`. Do **not** keep the player in a post-surfacing
+   `rebounding` state waiting for a timer or grounded probe; doing so delays
+   Chained Permeate and makes queue timing depend on unrelated airborne motion.
 
    This produces the "lighter ball released from underwater" feel: speed builds
    *while embedded*, peaks at the surface, then decays under gravity. Deeper
@@ -81,8 +83,9 @@ for a follow-up extension.
    apex height — but emergently, not via a `lerp(min, max, depth)` curve. The
    former `REBOUND_MIN_SPEED` / `REBOUND_MAX_SPEED` / `REBOUND_MAX_DEPTH_TILES`
    constants are removed; the new `BUOYANCY_ACCEL` and `BUOYANCY_MAX_SPEED`
-   replace them. Tuning target: a 5-tile-deep dive produces an apex roughly
-   matching the previous demo's high-ledge clear; verify in smoke tests.
+   replace them. Tuning target: `BUOYANCY_ACCEL = 1.2` lets a 1-tile floor
+   rebound climb to the next platform with two empty tile rows between, while a
+   5-tile-deep dive still clears the high ledge; verify both in smoke tests.
 
 3. **Stuck detection** — Since the rebound only ever exits upward, stuck
    reduces to a single upward count: starting from the **first solid row in
@@ -105,15 +108,13 @@ for a follow-up extension.
 
 6. **Rebound air control** — horizontal accel halved during the rebound state,
    horizontal speed uncapped (so launch + drift can carry past `MAX_RUN_SPEED`).
-   The rebound state now spans **two sub-phases**: (a) `buoyant` — embedded,
-   buoyancy force active, vy clamped to `BUOYANCY_MAX_SPEED`; (b) `airborne` —
-   surfaced, gravity active, free flight. The state remains `rebounding` (and
-   thus eligible for halved-accel air control + uncapped horizontal speed)
-   through both phases until either the player lands grounded or
-   `REBOUND_STATE_DURATION` of *post-surfacing* time elapses. The timer starts
-   when the player surfaces, not when Shift is released — otherwise deep dives
-   would burn the steering window entirely on buoyant ascent and leave none for
-   the airborne drift to the landing ledge.
+   The rebound state is **embedded-only**: it exists while the player overlaps
+   solid and buoyancy is active. The first fixed step on which
+   `overlappingSolidTiles(playerRect()).length === 0` is the surfacing frame,
+   and `rebounding` exits immediately on that frame. After surfacing, normal
+   `solid` gravity/collision and normal air control apply unless a queued
+   Permeation is consumed. `REBOUND_STATE_DURATION` is therefore removed from
+   state-exit logic; it must not delay manual or auto chain consumption.
 
 7. **Permeation feel — drag and center-pull, not free-fall.** While `permeating`
    *and* the player's rect overlaps any solid *and* the `permeateUntilClear`
@@ -148,12 +149,12 @@ for a follow-up extension.
    the next Permeation. "Fresh" means a Shift-down edge that occurs after the
    rebound has started; simply continuing to hold the Shift key that was just
    released to trigger the rebound does not queue anything. The queued
-   Permeation is consumed at the exact moment the rebound would otherwise return
-   to `solid` (grounded or airborne rebound timer expired): instead of becoming
-   `solid`, the player becomes `permeating` on that same fixed step. Releasing
-   Shift before the queue is consumed cancels the queued Permeation. This is the
-   manual advanced chain: release Shift to rebound, then press and hold Shift
-   again during the rebound to dive immediately when the rebound ends.
+   Permeation is consumed on the **surfacing frame**: the first fixed step where
+   the player's rect no longer overlaps any solid. Instead of becoming `solid`,
+   the player becomes `permeating` on that same fixed step. Releasing Shift
+   before surfacing cancels the queued Permeation. This is the manual advanced
+   chain: release Shift to rebound, then press and hold Shift again during the
+   embedded rebound to dive immediately as soon as the body clears solid.
 
 10. **Auto Rebound/Permeate assist.** Holding Left Ctrl while Shift is also held
     enables Auto Rebound/Permeate. The assist is active only while both
@@ -166,14 +167,18 @@ for a follow-up extension.
       Shift release. This uses the same bottom-half-overlap and stuck rules as
       manual rebound; top-half-only overlap still does not rebound.
     - If the player is `rebounding`, keep the next Permeation queued
-      automatically. When the rebound would return to `solid`, enter
-      `permeating` on that same step instead.
+      automatically. On the surfacing frame, enter `permeating` on that same
+      step instead of `solid`.
     - Once the player is `permeating` again, the assist waits until the player
       reaches a valid bottom-half overlap and then triggers the next rebound.
 
     The result is: hold Shift to begin permeating, hold Left Ctrl to assist the
     chain, and the game alternates Rebound -> queued Permeate -> Rebound as long
-    as both keys remain held and each rebound is valid.
+    as both keys remain held and each rebound is valid. A regression target is a
+    vertical stack of 10 one-tile platforms, each separated by two empty tile
+    rows: after the player permeates fully into the bottom platform, holding
+    Shift+Left Ctrl must chain all the way through the stack without pressing
+    Space or releasing either key.
 
 11. **Fixed-timestep loop at 60Hz with accumulator.** No render interpolation —
    at 60Hz visual cost is negligible and the code stays readable. `requestAnimationFrame`
@@ -213,7 +218,8 @@ for a follow-up extension.
 - Auto Rebound/Permeate uses `ControlLeft` only. Right Ctrl does not enable the
   assist unless explicitly added later.
 - "Surfaced" = `overlappingSolidTiles(playerRect()).length === 0`. Buoyancy
-  shuts off the same step this becomes true; gravity resumes the next step.
+  shuts off the same step this becomes true, and `rebounding` exits on that
+  same step to either `solid` or queued `permeating`.
 - Checkpoint = level start; no mid-level checkpoints.
 - Goal flag = a yellow rectangle at the level end; touching it sets a `won`
   flag and renders "Level Complete".
@@ -236,8 +242,8 @@ for a follow-up extension.
 | `COYOTE_FRAMES` | 6 | Frames after leaving ground where jump still works. |
 | `JUMP_BUFFER_FRAMES` | 6 | Frames before landing where Space press is remembered. |
 | `REBOUND_AIR_CONTROL` | 0.5 | Horizontal accel multiplier during rebound state. |
-| `REBOUND_STATE_DURATION` | 0.4 | Seconds the airborne phase of rebound lasts (steering window; timer starts on surfacing, not on Shift release). |
-| `BUOYANCY_ACCEL` | 1.0 | Upward acceleration applied while embedded during rebound (px/frame²). Replaces gravity in the buoyant phase. |
+| `REBOUND_STATE_DURATION` | removed | Rebound exits on surfacing; no post-surfacing timer gates state transitions. |
+| `BUOYANCY_ACCEL` | 1.2 | Upward acceleration applied while embedded during rebound (px/frame²). Replaces gravity in the buoyant phase; tuned so one-tile auto-chain rebounds can climb two-empty-row gaps. |
 | `BUOYANCY_MAX_SPEED` | 18 | Cap on upward speed during buoyant phase (px/frame). Saturates around a 5-tile dive depth. |
 | `PERMEATE_DRAG` | 0.08 | Per-frame velocity drag while permeating *and* embedded in solid (1 = instant stop, 0 = no drag). |
 | `PERMEATE_PULL_ACCEL` | 0.3 | Acceleration toward contiguous mass's vertical center while permeating + embedded (px/frame²). Replaces gravity. |
@@ -269,7 +275,7 @@ Single `index.html`, expected ~900 lines. Sections in order:
       // === LEVEL PARSER ===   builds tiles[r][c]; extracts spawn (S) and goal (G)
       // === INPUT ===          keys{}, keyEdge{}, keyReleased{} with edge detection
       // === PLAYER STATE ===   {x, y, vx, vy, state, facing, grounded,
-      //                         coyoteTimer, jumpBufferTimer, reboundAirborneTimer,
+      //                         coyoteTimer, jumpBufferTimer,
       //                         queuedPermeate, queuedPermeateSource,
       //                         permeateUntilClear, stuckTimer, flashTimer}
       // === PHYSICS HELPERS ===
@@ -278,7 +284,7 @@ Single `index.html`, expected ~900 lines. Sections in order:
       //   - bottomHalfRect(rect)               → lower half of player rect (rect.y + rect.h/2 to rect.y + rect.h)
       //   - bottomHalfOverlapsSolid(rect)      → overlappingSolidTiles(bottomHalfRect(rect)).length > 0
       //   - overlappingSolidTiles(rect)        → list of {c, r}
-      //   - moveAndCollide(dx, dy)             → axis-separated swept-AABB (used in solid + airborne rebound only)
+      //   - moveAndCollide(dx, dy)             → axis-separated swept-AABB (used after surfacing exits rebound)
       //   - countSolidRowsAbove(rect)          → see "stuck detection" below
       //   - shouldRebound(rect)                → see "Rebound trigger" below
       //   - contiguousMassExtents(rect)        → {topY, botY, centerY} for column lane (or null if not embedded)
@@ -315,21 +321,21 @@ Single `index.html`, expected ~900 lines. Sections in order:
       //        - permeating + embedded + !latch:     drag + center-pull (no gravity)
       //        - permeating + (open air OR latch):   vy += GRAVITY (clamped to MAX_FALL_SPEED)
       //        - rebounding + embedded (buoyant):    vy -= BUOYANCY_ACCEL (clamped to -BUOYANCY_MAX_SPEED)
-      //        - rebounding + airborne:              vy += GRAVITY (clamped); reboundAirborneTimer ticks
+      //        - rebounding + clear:                 exit rebounding immediately (surface frame)
       //   12. move:
       //        - permeating: x += vx; y += vy; NO collision
       //        - rebounding + embedded (buoyant): x += vx; y += vy; NO collision (intangible
       //          while in the mass, otherwise the next row of a multi-tile block stops the ascent;
       //          collision resumes the step the player surfaces — see
       //          "Buoyancy phase" section)
-      //        - rebounding + airborne, or solid: moveAndCollide(vx, vy) (axis-separated swept-AABB)
+      //        - solid: moveAndCollide(vx, vy) (axis-separated swept-AABB)
       //   13. probe-grounded:
       //        - precondition: overlappingSolidTiles(playerRect()) is empty
       //          (the body must already be clear of solid; otherwise grounded = false)
       //        - then: grounded = overlappingSolidTiles(playerRect shifted +1px y) is non-empty
-      //   14. exit rebounding when (airborne sub-phase AND reboundAirborneTimer ≤ 0) OR grounded;
-      //        if queuedPermeate is armed, consume it and enter permeating;
-      //        otherwise enter solid immediately (no cooldown)
+      //   14. exit rebounding on the first frame the rect is fully clear of solid;
+      //        if queuedPermeate is armed, consume it and enter permeating on that same frame;
+      //        otherwise enter solid immediately (no timer, no cooldown)
       //   15. off-level fail-safe respawn (y > LEVEL_HEIGHT_PX + buffer)
       //   16. goal collision → won
       // === RENDER ===
@@ -437,13 +443,11 @@ if overlappingSolidTiles(playerRect()).length > 0:
   // Buoyant sub-phase: replace gravity with upward buoyancy.
   vy -= BUOYANCY_ACCEL
   if vy < -BUOYANCY_MAX_SPEED: vy = -BUOYANCY_MAX_SPEED
-  // Note: do NOT start REBOUND_STATE_DURATION timer yet — wait until surfacing.
 else:
-  // Airborne sub-phase: surfaced. Gravity resumes; start steering window.
-  if reboundAirborneTimer is uninitialized: reboundAirborneTimer = REBOUND_STATE_DURATION
-  vy += GRAVITY
-  if vy > MAX_FALL_SPEED: vy = MAX_FALL_SPEED
-  reboundAirborneTimer -= DT
+  // Surfacing frame: rebound is over immediately.
+  // If queuedPermeate is armed, consume it now and state = "permeating".
+  // Otherwise state = "solid". Gravity/collision resume under that new state.
+  consumeReboundExit()
 ```
 
 Movement during the buoyant sub-phase is **fully intangible**: position is
@@ -456,11 +460,12 @@ in the contiguous mass." The result was that buoyancy could not lift the
 player past the first internal row of a thick block, capping the rebound
 inside the dive column.
 
-Collision resumes the moment the player surfaces (the airborne sub-phase
-uses `moveAndCollide` normally). The transition is automatic: the buoyancy
-branch above runs only while `overlappingSolidTiles(playerRect()).length > 0`,
-so the first step the rect is clear of solid hands movement back to the
-normal collide path.
+Collision resumes the moment the player surfaces, but only after the state has
+already left `rebounding`. The transition is automatic: the buoyancy branch
+above runs only while `overlappingSolidTiles(playerRect()).length > 0`, so the
+first step the rect is clear of solid consumes any queued Permeation or enters
+`solid`. This immediate transition is required for manual Chained Permeate:
+waiting for a grounded probe or airborne timer makes the queue feel dropped.
 
 ### Permeation drag and center-pull (while embedded)
 
@@ -501,9 +506,8 @@ PERMEATING --Shift up & only top-half overlaps--> PERMEATING (Shift treated as s
 PERMEATING --Shift up & no overlap--> SOLID
 REBOUNDING --fresh Shift down edge--> REBOUNDING (queuedPermeate = manual)
 REBOUNDING --auto active--> REBOUNDING (queuedPermeate = auto)
-REBOUNDING (buoyant) --surfaces (no overlap)--> REBOUNDING (airborne; timer starts)
-REBOUNDING (airborne) --timer expires OR landed; queuedPermeate armed--> PERMEATING
-REBOUNDING (airborne) --timer expires OR landed; no queue--> SOLID
+REBOUNDING --surfaces (no overlap); queuedPermeate armed--> PERMEATING
+REBOUNDING --surfaces (no overlap); no queue--> SOLID
 STUCK --timer expires--> respawn -> SOLID
 SOLID --touch goal--> WON
 ```
@@ -520,9 +524,9 @@ re-permeated).
 
 The chain queue is intentionally separate from `permeateUntilClear`. A queued
 Permeation only matters during `rebounding` and is consumed only at the
-would-be rebound exit. Manual queues require Shift to remain held until
-consumption; auto queues require both Shift and Left Ctrl to remain held. When
-a queued Permeation is consumed, clear `queuedPermeate`, set
+surfacing frame. Manual queues require Shift to remain held until surfacing;
+auto queues require both Shift and Left Ctrl to remain held until surfacing.
+When a queued Permeation is consumed, clear `queuedPermeate`, set
 `queuedPermeateSource = null`, set `state = "permeating"`, and leave collision
 disabled for the next move step as usual for Permeation.
 
@@ -632,10 +636,11 @@ gap — cannot coexist with Beat 2 in this geometry without violating constraint
 - The player's rebound apex column equals the dive column at trigger time
   (vx = 0 at trigger; drift only comes from air-control input).
 - The new buoyancy model gives a longer drift window than the old instant-launch
-  rebound: horizontal accel is halved but applied for the full buoyant phase
-  *plus* `REBOUND_STATE_DURATION` of post-surfacing flight. For a 5-tile dive
-  that's roughly ~18 frames of buoyant ascent + 24 frames airborne ≈ 42 frames
-  total, producing ~200-260 px (~6-8 tiles) of lateral drift maximum.
+  rebound because horizontal accel is halved but applied for the full embedded
+  buoyant phase, and normal air control resumes immediately after surfacing.
+  For a 5-tile dive this still produces enough lateral movement to reach the
+  high ledge, but Chained Permeate timing is governed by surfacing, not by an
+  extra post-surfacing rebound timer.
 - Anything solid directly above the dive column blocks the ascent and caps the
   apex at the obstruction's bottom edge — the buoyant phase pushes the player
   into it, sustained contact triggers stuck.
@@ -653,8 +658,11 @@ horizontal velocity rather than falling through it).
 ## Files To Be Created
 
 - `index.html` at `C:\Users\rafae\source\games\index.html` — the entire deliverable.
+- `smoke-test.js` at `C:\Users\rafae\source\games\smoke-test.js` — optional
+  local Node smoke harness for the chain regressions and other direct `step()`
+  tests. It has no external dependencies and is not required by the browser demo.
 
-No existing files to modify. No external dependencies.
+No external dependencies.
 
 ---
 
@@ -722,8 +730,9 @@ Required smoke tests:
     — the player passes through internal rows of the multi-tile block without
     stopping (collision must be disabled while embedded — see Buoyancy phase
     section);
-    (c) the frame the player surfaces, `vy` increases by `GRAVITY` (gravity
-    resumes), and from that frame onward `moveAndCollide` is used.
+    (c) the frame the player surfaces, `state` immediately leaves
+    `rebounding` for either `solid` or queued `permeating`; gravity/collision
+    resume under that new state on subsequent fixed steps.
 12. **Ground probe ignores currently-overlapped solids.** Place the player
     embedded in solid (e.g. mid-block) with state `rebounding`. Call the
     grounded-probe routine. Assert `grounded == false` even though there is
@@ -733,10 +742,11 @@ Required smoke tests:
     below; assert `grounded == true`. (Probe must short-circuit when the body
     overlaps solid — see STEP outline §13.)
 13. **Beat 2 deep dive at col 18-22, dive ~30-40 frames → buoyant rebound that
-    lands on high ledge.** Verify with horizontal input held Right during the
-    rebound state: final state is `solid` or `won`, final position is on the
-    high ledge (`y == 14*32 - 40` and `x >= 24*32`). This is the integration
-    test for the new buoyancy + extended steering window working together.
+    lands on high ledge.** Verify with horizontal input held Right through the
+    rebound and post-surfacing flight: final state is `solid` or `won`, final
+    position is on the high ledge (`y == 14*32 - 40` and `x >= 24*32`). This is
+    the integration test for buoyant speed buildup plus normal post-surfacing
+    air control working together.
     (Frame count is higher than the old plan because permeation descent is
     now drag-limited rather than free-fall.)
 14. **Stuck case.** Inject a vertical column of solid tiles 8 tiles tall directly
@@ -747,24 +757,34 @@ Required smoke tests:
     overlapped solid row (per Decision §3) — verify by placing the player such
     that the contiguous mass *top* is in empty space above the player but the
     count from the first overlapped row still exceeds the radius.
-15. **No cooldown after rebound.** Immediately after a rebound resolves to
-    `solid` with no queue armed, press Shift on the next fixed step. Assert:
-    state becomes `permeating` immediately; there is no
+15. **No cooldown after rebound.** Immediately after a rebound surfaces and
+    resolves to `solid` with no queue armed, press Shift on the next fixed step.
+    Assert: state becomes `permeating` immediately; there is no
     `permeateCooldownTimer`, no cooldown gate, and no delay.
 16. **Manual Chained Permeate buffer.** Trigger a rebound, then during the
     rebound press Shift again. Assert `queuedPermeate == true` and
-    `queuedPermeateSource == "manual"`. When the rebound would otherwise end,
-    assert the queue is consumed on that same step and state becomes
-    `permeating`, not `solid`. Repeat with Shift released before rebound exit
-    and assert the queued Permeation is canceled.
+    `queuedPermeateSource == "manual"`. On the exact frame
+    `overlappingSolidTiles(playerRect()).length` becomes 0, assert the queue is
+    consumed on that same step and state becomes `permeating`, not `solid`.
+    Repeat with Shift released before surfacing and assert the queued
+    Permeation is canceled.
 17. **Auto Rebound/Permeate assist.** Start `permeating` with Shift held, then
     hold Left Ctrl. When the player's bottom half overlaps solid, assert
     `shouldRebound()` fires automatically and state becomes `rebounding`
     without a Shift release. While still holding Shift+Left Ctrl, assert a
-    queued auto Permeation is armed during rebound and consumed at rebound exit.
-    Release Left Ctrl before a later rebound exit and assert the auto queue is
-    cleared and the player returns to `solid` normally.
-18. **Goal collision.** Place player overlapping `goalRect` → after one step,
+    queued auto Permeation is armed during rebound and consumed on the surfacing
+    frame. Release Left Ctrl before a later surfacing frame and assert the auto
+    queue is cleared and the player returns to `solid` normally.
+18. **Auto assist 10-platform vertical stack.** Clear the test level, create 10
+    one-tile platforms in the same column lane, each separated by exactly two
+    empty tile rows. Place the player standing on the bottom platform, hold
+    Shift until the player is fully embedded in it, then hold Left Ctrl while
+    keeping Shift held. Without pressing Space and without releasing Shift or
+    Ctrl, assert the player chains Rebound -> Permeate through every platform
+    row and reaches above the top platform. This catches the bug where
+    `rebounding` stayed active after surfacing and prevented queued Permeation
+    from being consumed in time.
+19. **Goal collision.** Place player overlapping `goalRect` → after one step,
     state is `won`.
 
 ### Browser verification (the user's responsibility)
@@ -793,10 +813,13 @@ Open `index.html` in Chrome/Firefox/Edge:
    (Solid white, Permeating cyan, Rebounding orange, Stuck red, Won yellow).
 8. Manual Chained Permeate works: release Shift to rebound, press and hold
    Shift again during the rebound, and the player immediately starts
-   permeating when the rebound would otherwise end.
+   permeating on the surfacing frame, as soon as their rect stops overlapping
+   solid.
 9. Auto Rebound/Permeate works: hold Shift to begin permeating, hold Left Ctrl,
    and the player alternates Rebound -> Permeate while both keys remain held.
-   Releasing either key stops the auto chain.
+   Releasing either key stops the auto chain. On a 10-platform stack with two
+   empty tile rows between platforms, the chain reaches the top without Space
+   or key releases.
 10. The HUD has no cooldown bar. It may show a queued-chain or auto-chain
     indicator, but no post-rebound lockout appears.
 11. "Level Complete" overlay appears on goal touch with "Press R to play again".
@@ -812,5 +835,5 @@ The deliverable response must include, in order:
 3. Full single-file HTML in one code block, with heavy comments in the physics
    and rebound sections.
 4. Smoke-harness results — one line per test (PASS/FAIL with the assertion
-   that fired on failure). All 18 tests in the Verification Plan must pass
+   that fired on failure). All 19 tests in the Verification Plan must pass
    before the deliverable is considered complete.
