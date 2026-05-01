@@ -60,20 +60,19 @@ for a follow-up extension.
 
    The "bottom half overlaps" rule is what gates the rebound: the player's belly
    is the buoyant part, the player's head poking out of solid is just "almost
-   surfaced." Stuck detection still applies: if `countSolidRowsAbove(rect) >
-   STUCK_SEARCH_RADIUS` (see §3), the rebound resolves to `stuck` instead.
+   surfaced." Stuck detection still applies: if the upward exit ray is blocked
+   beyond `STUCK_SEARCH_RADIUS`, declare stuck.
 
 2. **Rebound feel — buoyancy force, not instant ejection.** On rebound trigger
    the player's `vy` is **set to 0** (not to a launch velocity). The state
-   becomes `rebounding`, and **on subsequent fixed steps** while the player is
-   still overlapping the contiguous solid mass, every step applies an upward
-   buoyancy acceleration `BUOYANCY_ACCEL` instead of gravity. The trigger step
-   itself does not apply buoyancy — `vy` stays at 0 for one step (see §10).
-   Vertical speed is clamped at `BUOYANCY_MAX_SPEED` so the player doesn't
-   accelerate forever in very deep blocks. The moment the player's rect no
-   longer overlaps any solid (i.e. they have surfaced), the buoyancy force ends
-   and gravity resumes; the velocity they had at the surface carries them up
-   ballistically and they fall back under normal physics.
+   becomes `rebounding`, and while the player is still overlapping the
+   contiguous solid mass, every step applies an upward buoyancy acceleration
+   `BUOYANCY_ACCEL` instead of gravity. Vertical speed is clamped at
+   `BUOYANCY_MAX_SPEED` so the player doesn't accelerate forever in very deep
+   blocks. The moment the player's rect no longer overlaps any solid (i.e. they
+   have surfaced), the buoyancy force ends and gravity resumes; the velocity
+   they had at the surface carries them up ballistically and they fall back
+   under normal physics.
 
    This produces the "lighter ball released from underwater" feel: speed builds
    *while embedded*, peaks at the surface, then decays under gravity. Deeper
@@ -84,24 +83,18 @@ for a follow-up extension.
    replace them. Tuning target: a 5-tile-deep dive produces an apex roughly
    matching the previous demo's high-ledge clear; verify in smoke tests.
 
-3. **Stuck detection** — Since the rebound only ever exits upward, stuck
-   reduces to a single upward count: starting from the **first solid row in
-   the player's column lane that the player overlaps**, walk upward and count
-   contiguous solid rows. If the count exceeds `STUCK_SEARCH_RADIUS` (6 tiles),
-   declare stuck. The walk must start from the first overlapped row, *not*
-   from the top of the contiguous mass — counting from the top would mean
-   walking immediately into empty space and reporting 0, never declaring
-   stuck. See `countSolidRowsAbove` in the rebound math section.
+3. **Stuck detection** — Since the rebound only ever exits upward, stuck reduces
+   to a single upward raycast: if the column lane above the player has more than
+   `STUCK_SEARCH_RADIUS` (6 tiles) of solid before reaching empty space, declare
+   stuck. The 4-cardinal raycast is no longer needed. Convex pockets sealed
+   above the player will fail this check correctly.
 
 4. **Coyote time and jump buffer** both = 6 frames @ 60Hz (0.1s). Standard
    Celeste defaults.
 
 5. **Variable jump** = velocity cap on Space-release. When Space is released
    during upward motion, clamp `vy` to `JUMP_CUT_VELOCITY` (-3.5 px/frame).
-   Cleaner than scaling. Like all edge-triggered velocity changes (jump press,
-   jump cut, rebound trigger), the new value is left untouched for the
-   *remainder of that step* — gravity, buoyancy, and other vertical forces
-   apply starting on the following fixed step. See §10 below.
+   Cleaner than scaling.
 
 6. **Rebound air control** — horizontal accel halved during the rebound state,
    horizontal speed uncapped (so launch + drift can carry past `MAX_RUN_SPEED`).
@@ -116,22 +109,15 @@ for a follow-up extension.
    the airborne drift to the landing ledge.
 
 7. **Permeation feel — drag and center-pull, not free-fall.** While `permeating`
-   *and* the player's rect overlaps any solid *and* the `permeateUntilClear`
-   latch is **not** set, gravity is replaced by:
+   *and* the player's rect overlaps any solid, gravity is replaced by:
    (a) a vertical drag force `vy *= (1 - PERMEATE_DRAG)` each frame, simulating
    resistance from the medium, and (b) a gentle pull toward the contiguous solid
    mass's vertical center: `vy += sign(centerY - rect.centerY) * PERMEATE_PULL_ACCEL`,
    where `centerY` is the midpoint between `topSolidRow * TS` and
    `(botSolidRow + 1) * TS` for the contiguous mass under the player's column
-   lane (computed identically to the rebound math). In two cases drag and pull
-   are skipped and **normal gravity** applies instead:
-   - **Outside the medium** — permeating in mid-air after dropping out the
-     bottom of a thin floor.
-   - **`permeateUntilClear` latch is set** — the player has released Shift with
-     only the top half overlapping (see §1 and the state machine). The latch
-     forces gravity-only physics so the head clears the floor naturally; if
-     center-pull stayed active, a thin floor would re-capture the head every
-     time it tried to clear.
+   lane (computed identically to the rebound math). Outside the medium —
+   permeating in mid-air after dropping out the bottom of a thin floor — gravity
+   applies normally; the drag and pull only engage while embedded.
 
    This produces a "diving in water" feel: entry decelerates, the player settles
    toward the middle of the block at a low terminal speed, and shallow floors
@@ -148,26 +134,12 @@ for a follow-up extension.
    drives an accumulator that calls `step(dt = 1/60)` zero-or-more times per frame
    (capped at 0.25s of accumulated time to prevent spiral-of-death).
 
-10. **Edge-triggered velocity changes skip the same step's vertical force.**
-    Three events in `step()` set `vy` to a specific value: jump press
-    (`vy = JUMP_VELOCITY`), jump cut (`vy = JUMP_CUT_VELOCITY`), and rebound
-    trigger (`vy = 0`). When any of these fire, the vertical-force resolution
-    block (§9 in the STEP outline) is **skipped for that step only**, so the
-    intended value reaches the move/collide phase exactly. Gravity or buoyancy
-    resume on the very next fixed step. Implementation: the input-handling and
-    rebound-trigger blocks set a local `skipVerticalForce = true`, and the
-    vertical-force block early-returns if that flag is true. Without this
-    skip, jumps lose `GRAVITY` worth of velocity on press, jump-cuts lose
-    `GRAVITY` on release, and rebounds appear to start with a hidden
-    `BUOYANCY_ACCEL` impulse — making smoke tests non-deterministic and the
-    rebound feel "snappy" rather than building from rest.
-
 ### Visuals
 
-11. **Permeation visual** = 40% alpha + cyan stroke that pulses via `sin(t)`.
+10. **Permeation visual** = 40% alpha + cyan stroke that pulses via `sin(t)`.
     Stroke pulse doubles as a readability cue.
-12. **Rebounding visual** = orange stroke; **Stuck visual** = red flash.
-13. **Camera** follows player vertically (clamped to level bounds). Horizontal
+11. **Rebounding visual** = orange stroke; **Stuck visual** = red flash.
+12. **Camera** follows player vertically (clamped to level bounds). Horizontal
     is fixed since the level is exactly 1 screen wide (30 cols × 32 px = 960 px = view width).
 
 ### Assumptions
@@ -242,50 +214,33 @@ Single `index.html`, expected ~900 lines. Sections in order:
       // === PHYSICS HELPERS ===
       //   - isSolidTile(c, r)
       //   - playerRect()
-      //   - bottomHalfRect(rect)               → lower half of player rect (rect.y + rect.h/2 to rect.y + rect.h)
-      //   - bottomHalfOverlapsSolid(rect)      → overlappingSolidTiles(bottomHalfRect(rect)).length > 0
+      //   - bottomHalfRect(rect)               → lower half of player rect
       //   - overlappingSolidTiles(rect)        → list of {c, r}
-      //   - moveAndCollide(dx, dy)             → axis-separated swept-AABB (used in solid + airborne rebound only)
-      //   - countSolidRowsAbove(rect)          → see "stuck detection" below
+      //   - moveAndCollide(dx, dy)             → axis-separated swept-AABB
+      //   - castClearTilesInDirection(rect, dir) → tile-count to first empty in lane
       //   - shouldRebound(rect)                → see "Rebound trigger" below
-      //   - contiguousMassExtents(rect)        → {topY, botY, centerY} for column lane (or null if not embedded)
+      //   - contiguousMassExtents(rect)        → {topY, botY, centerY} for column lane
       // === STEP (fixed dt) ===
-      //   1. decay timers (coyote, jumpBuffer, permeateCooldown, reboundAirborne, stuck, flash)
+      //   1. decay timers
       //   2. handle R-key reset
       //   3. handle stuck timer → respawn
-      //   4. permeation entry (with cooldown gate); a Shift re-press also clears
-      //      the permeateUntilClear latch (player has voluntarily re-permeated)
+      //   4. permeation entry (with cooldown gate); also clear permeateUntilClear latch on re-press
       //   5. on Shift release while permeating:
-      //        - if bottom-half overlap → shouldRebound() → rebounding | stuck;
-      //          on rebound trigger, set vy = 0 and skipVerticalForce = true (see §10 in Decisions)
-      //        - else if full-body overlap (only top half is in solid) → set permeateUntilClear latch
-      //          (stays permeating; gravity applies, no center-pull, see step 9)
-      //        - else (no overlap) → state = solid
-      //   6. if permeateUntilClear AND rect fully clear of solid → drop latch, state = solid
+      //        - shouldRebound() → solid | rebounding | stuck
+      //        - if bottom-half overlap absent but full-body overlap present → set permeateUntilClear latch (stays permeating)
+      //   6. while permeateUntilClear and rect fully clear → drop latch, transition to solid
       //   7. horizontal input → accel (halved during rebound, uncapped speed during rebound)
-      //   8. variable jump:
-      //        - on Space-press edge with coyote/buffer satisfied: vy = JUMP_VELOCITY, skipVerticalForce = true
-      //        - on Space-release while vy < JUMP_CUT_VELOCITY: vy = JUMP_CUT_VELOCITY, skipVerticalForce = true
-      //   9. vertical force resolution by state (skipped entirely if skipVerticalForce was set this step):
-      //        - solid:                              vy += GRAVITY (clamped to MAX_FALL_SPEED)
-      //        - permeating + embedded + !latch:     drag + center-pull (no gravity)
-      //        - permeating + (open air OR latch):   vy += GRAVITY (clamped to MAX_FALL_SPEED)
-      //        - rebounding + embedded (buoyant):    vy -= BUOYANCY_ACCEL (clamped to -BUOYANCY_MAX_SPEED)
-      //        - rebounding + airborne:              vy += GRAVITY (clamped); reboundAirborneTimer ticks
-      //   10. move:
-      //        - permeating: x += vx; y += vy; NO collision
-      //        - rebounding + embedded (buoyant): x += vx; y += vy; NO collision (intangible
-      //          while in the mass, otherwise the next row of a multi-tile block stops the ascent;
-      //          collision resumes the step the player surfaces — see
-      //          "Buoyancy phase" section)
-      //        - rebounding + airborne, or solid: moveAndCollide(vx, vy) (axis-separated swept-AABB)
-      //   11. probe-grounded:
-      //        - precondition: overlappingSolidTiles(playerRect()) is empty
-      //          (the body must already be clear of solid; otherwise grounded = false)
-      //        - then: grounded = overlappingSolidTiles(playerRect shifted +1px y) is non-empty
-      //   12. exit rebounding when (airborne sub-phase AND reboundAirborneTimer ≤ 0) OR grounded;
-      //        on exit, set permeateCooldownTimer = PERMEATE_COOLDOWN
-      //   13. off-level fail-safe respawn (y > LEVEL_HEIGHT_PX + buffer)
+      //   8. variable jump (cut to JUMP_CUT_VELOCITY on Space release while ascending)
+      //   9. vertical force resolution by state:
+      //        - solid:         vy += GRAVITY (clamped to MAX_FALL_SPEED)
+      //        - permeating + embedded: drag + center-pull (no gravity)
+      //        - permeating + open air: vy += GRAVITY (normal)
+      //        - rebounding + embedded (buoyant): vy -= BUOYANCY_ACCEL (clamped to BUOYANCY_MAX_SPEED)
+      //        - rebounding + airborne: vy += GRAVITY; reboundAirborneTimer ticks
+      //   10. move + collide (skipped while permeating; enabled during rebound buoyant phase)
+      //   11. probe-grounded (1px below)
+      //   12. exit rebounding on (airborne timer expired) OR (grounded)
+      //   13. off-level fail-safe respawn
       //   14. goal collision → won
       // === RENDER ===
       //   - dark gradient bg → parallax dot field → tiles (with edge highlights/shadows)
@@ -310,14 +265,11 @@ used to live in `computeRebound` is now split:
 
 - **`shouldRebound(rect)`** — fired on Shift release. Returns one of
   `{fire: false}`, `{fire: true, stuck: true}`, or `{fire: true, stuck: false}`.
-- **`countSolidRowsAbove(rect)`** — counts contiguous solid rows in the
-  player's column lane *starting from the first overlapped solid row*, walking
-  upward. This is the stuck check (compare against `STUCK_SEARCH_RADIUS`).
-  Counting from the *top* of the contiguous mass would always under-report
-  (the row above the top is empty by definition), so the start row matters.
-- **Contiguous-mass extents** — still computed for the column lane the player
-  occupies, used by the permeation center-pull. Recomputed each step while
-  permeating, since the player's column lane can drift sideways during the dive.
+- **Contiguous-mass extents** — still computed identically to before for the
+  column lane the player occupies, but now used for two purposes: the upward
+  stuck check, and the vertical center used by permeation pull. They are
+  recomputed each step while permeating or in the buoyant phase, since the
+  player's column lane can drift sideways during the dive.
 
 ```
 function bottomHalfOverlapsSolid(rect):
@@ -325,42 +277,17 @@ function bottomHalfOverlapsSolid(rect):
   bh = {x: rect.x, y: rect.y + rect.h / 2, w: rect.w, h: rect.h / 2}
   return overlappingSolidTiles(bh).length > 0
 
-function countSolidRowsAbove(rect):
-  // Walk upward from the FIRST solid row the player overlaps (not from the top
-  // of the contiguous mass — the top is, by definition, immediately under an
-  // empty row, which would always make the count 0 and never trigger stuck).
-  // Returns the count of contiguous solid rows in the player's column lane,
-  // starting at and including the first overlapped solid row, walking upward.
-  TS = TILE_SIZE
-  c0, c1 = floor(rect.x / TS), floor((rect.x + rect.w - 1) / TS)
-  r0, r1 = floor(rect.y / TS), floor((rect.y + rect.h - 1) / TS)
-  laneSolidRow(r) = exists c in [c0..c1] where isSolidTile(c, r)
-
-  // First overlapped solid row, scanning top-down across the player's vertical span.
-  startRow = first r in [r0..r1] where laneSolidRow(r) is true
-  if startRow is undefined: return 0  // not embedded → not stuck
-
-  count = 0
-  for r = startRow down to 0:
-    if laneSolidRow(r): count += 1
-    else: break
-  return count
-
 function shouldRebound(rect):
   if not bottomHalfOverlapsSolid(rect): return {fire: false}
   // Rebound is going to fire — check upward viability for stuck.
-  // Stuck := the contiguous solid mass above (starting at the first row the
-  // player overlaps) extends beyond STUCK_SEARCH_RADIUS rows before opening up.
-  if countSolidRowsAbove(rect) > STUCK_SEARCH_RADIUS: return {fire: true, stuck: true}
+  upClear = castClearTilesInDirection(rect, "up")  // tiles of solid before empty
+  if upClear > STUCK_SEARCH_RADIUS: return {fire: true, stuck: true}
   return {fire: true, stuck: false}
 
 function contiguousMassExtents(rect):
   // Identical to the old anchor/expand walk, but only along rows for this lane.
-  // Used by permeation pull (which needs the vertical center). Note this finds
-  // the FULL contiguous mass; countSolidRowsAbove only walks up from a starting
-  // row inside it. They are deliberately different: stuck cares about the
-  // ceiling between the player and open air, center-pull cares about the
-  // entire mass the player is in.
+  // Used by buoyancy (no-op, just needs overlap test) and by permeation pull
+  // (which needs the vertical center).
   TS = TILE_SIZE
   c0, c1 = floor(rect.x / TS), floor((rect.x + rect.w - 1) / TS)
   r0, r1 = floor(rect.y / TS), floor((rect.y + rect.h - 1) / TS)
@@ -401,47 +328,41 @@ else:
   reboundAirborneTimer -= DT
 ```
 
-Movement during the buoyant sub-phase is **fully intangible**: position is
-updated as `x += vx; y += vy` with **no collision check**. Re-enabling
-collision while embedded (the original approach) is wrong — the swept-AABB
-would refuse to let the player move from row R into row R-1 of the same
-multi-tile block, since row R-1 is solid and the swept-AABB doesn't
-distinguish "a tile the player is already overlapping" from "the next tile
-in the contiguous mass." The result was that buoyancy could not lift the
-player past the first internal row of a thick block, capping the rebound
-inside the dive column.
-
-Collision resumes the moment the player surfaces (the airborne sub-phase
-uses `moveAndCollide` normally). The transition is automatic: the buoyancy
-branch above runs only while `overlappingSolidTiles(playerRect()).length > 0`,
-so the first step the rect is clear of solid hands movement back to the
-normal collide path.
+Movement is **not skipped during the buoyant phase** — collision is enabled,
+but since the player is embedded the next-frame position is simply
+`(x + vx, y + vy)` adjusted by the swept-AABB to stop at any solid the player
+*would have moved into from a non-overlapping starting position*. Practically,
+`moveAndCollide` already handles this: tiles the player already overlaps don't
+block; tiles the player would newly collide with do. This means the buoyant
+ascent stops cleanly at the underside of any solid above (which would also
+trigger stuck if it persists, but normally the player surfaces above the block
+they dove into, not into a sealed pocket).
 
 ### Permeation drag and center-pull (while embedded)
 
 ```
 // Inside step(), if state == "permeating":
 extents = contiguousMassExtents(playerRect())
-if extents != null and not permeateUntilClear:
-  // Embedded, no latch: drag + pull toward vertical center, no gravity.
+if extents != null:
+  // Embedded: drag + pull toward vertical center, no gravity.
   vy *= (1 - PERMEATE_DRAG)
   rectCenterY = playerRect().y + playerRect().h / 2
   if rectCenterY < extents.centerY: vy += PERMEATE_PULL_ACCEL
   else if rectCenterY > extents.centerY: vy -= PERMEATE_PULL_ACCEL
 else:
-  // Either in open air (dropping through thin floor) OR latched
-  // (top-half-only release; center-pull would re-capture, so use gravity).
+  // Permeating but in open air (e.g. dropping out the bottom of a thin floor).
+  // Gravity applies normally; movement otherwise unchanged.
   vy += GRAVITY
   if vy > MAX_FALL_SPEED: vy = MAX_FALL_SPEED
 ```
 
-Terminal sink speed in the embedded, unlatched case is approximately
+Terminal sink speed in the embedded case is approximately
 `PERMEATE_PULL_ACCEL / PERMEATE_DRAG ≈ 3.75 px/frame`, far below
 `MAX_FALL_SPEED`, which is the desired "underwater" feel. The center-pull also
 means a player who Shift-drops onto a thin floor settles *into* the floor and
 needs to release Shift to get out — releasing while still in the bottom half
-fires a rebound up; releasing while only the head is in the floor sets the
-`permeateUntilClear` latch (gravity applies, head clears, state → solid).
+fires a rebound up; releasing while only the head is in the floor (because
+they've drifted down past the center) leaves them to surface naturally.
 
 ### State machine
 
@@ -623,12 +544,8 @@ Required smoke tests:
    immediately after spawn.
 3. **Gravity settles.** After 30 steps with no input, player has `grounded = true`
    and is sitting on the bottom floor.
-4. **Variable jump with one-frame force skip.** Press Space → after the step in
-   which Space-press is registered, `vy == JUMP_VELOCITY` exactly (not
-   `JUMP_VELOCITY + GRAVITY`). Release Space while ascending → after the step
-   in which Space-release is registered, `vy == JUMP_CUT_VELOCITY` exactly.
-   On the *following* step (no input), `vy` increases by `GRAVITY`. This
-   directly tests Decision §10.
+4. **Variable jump.** Press Space → vy = `JUMP_VELOCITY`. Release Space while
+   ascending → vy clamps to `JUMP_CUT_VELOCITY`.
 5. **Permeation entry.** Hold Shift while grounded → state flips to `permeating`.
 6. **Permeation falls through thin floor with drag.** Stand on row 41 thin floor at
    col 11, hold Shift. Verify the descent through the floor is *slower* than
@@ -642,57 +559,37 @@ Required smoke tests:
    mass's `centerY` over ~30 frames within ±4 px, and stays there.
 8. **Release in open air → solid.** Hold Shift in mid-air below the thin floor,
    release → state flips to `solid` (no rebound).
-9. **Top-half-only release latches permeateUntilClear, gravity applies.** Permeate
-   down through a 1-tile-thick floor until only the player's top half overlaps
-   the floor (head in, body out below). Release Shift. Assert: state remains
-   `permeating`, `permeateUntilClear` is true, no rebound has fired. Step once
-   and assert `vy` increased by exactly `GRAVITY` (not modified by drag/pull —
-   verifying the latch's gravity-override per Decision §7). Step until the head
+9. **Top-half-only release latches permeateUntilClear.** Permeate down through a
+   1-tile-thick floor until only the player's top half overlaps the floor (head
+   in, body out below). Release Shift. Assert: state remains `permeating`,
+   `permeateUntilClear` is true, no rebound has fired. Step until the head
    clears the floor; assert state transitions to `solid` and the latch is
    cleared.
-10. **Bottom-half-only release fires rebound; vy = 0 for one step.** Permeate
-    into the Beat 2 block at col 20 just enough that the bottom half of the
-    player overlaps but the head is still above the block top. Release Shift.
-    Assert: state transitions to `rebounding`, `vy == 0` exactly *immediately
-    after the trigger step* (Decision §10 — no buoyancy applied that step). On
-    the next step, `vy == -BUOYANCY_ACCEL` (buoyancy applied, no other forces).
-11. **Buoyancy accelerates while embedded; intangible while in mass.** Trigger
-    a rebound from inside the Beat 2 block (5 tiles thick). Step frame-by-frame
-    and assert: (a) while `overlappingSolidTiles(playerRect())` is non-empty,
-    `vy` decreases by `BUOYANCY_ACCEL` each step, clamped at `-BUOYANCY_MAX_SPEED`;
-    (b) the player's `y` decreases by `vy` each step *with no collision check*
-    — the player passes through internal rows of the multi-tile block without
-    stopping (collision must be disabled while embedded — see Buoyancy phase
-    section);
-    (c) the frame the player surfaces, `vy` increases by `GRAVITY` (gravity
-    resumes), and from that frame onward `moveAndCollide` is used.
-12. **Ground probe ignores currently-overlapped solids.** Place the player
-    embedded in solid (e.g. mid-block) with state `rebounding`. Call the
-    grounded-probe routine. Assert `grounded == false` even though there is
-    solid 1px below the player rect — because the player's body itself
-    overlaps solid, the probe must short-circuit. Then move the player to a
-    position where the body is fully clear and a solid tile sits directly
-    below; assert `grounded == true`. (Probe must short-circuit when the body
-    overlaps solid — see STEP outline §11.)
-13. **Beat 2 deep dive at col 18-22, dive ~30-40 frames → buoyant rebound that
+10. **Bottom-half-only release fires rebound.** Permeate into the Beat 2 block at
+    col 20 just enough that the bottom half of the player overlaps but the head
+    is still above the block top. Release Shift. Assert: state transitions to
+    `rebounding`, `vy` is set to 0 (not a launch velocity), and on the next step
+    `vy` becomes negative (buoyancy applied).
+11. **Buoyancy accelerates while embedded.** Trigger a rebound from inside the
+    Beat 2 block. Step frame-by-frame and assert: while embedded, `vy` decreases
+    by `BUOYANCY_ACCEL` each frame, clamped at `-BUOYANCY_MAX_SPEED`. The frame
+    the player surfaces, gravity resumes (`vy` starts increasing again).
+12. **Beat 2 deep dive at col 18-22, dive ~30-40 frames → buoyant rebound that
     lands on high ledge.** Verify with horizontal input held Right during the
     rebound state: final state is `solid` or `won`, final position is on the
     high ledge (`y == 14*32 - 40` and `x >= 24*32`). This is the integration
     test for the new buoyancy + extended steering window working together.
     (Frame count is higher than the old plan because permeation descent is
     now drag-limited rather than free-fall.)
-14. **Stuck case.** Inject a vertical column of solid tiles 8 tiles tall directly
-    above the player. Place the player embedded such that
-    `countSolidRowsAbove(playerRect()) > STUCK_SEARCH_RADIUS`. Release Shift
-    while embedded → `shouldRebound()` returns `{fire: true, stuck: true}`,
-    state transitions to `stuck`. Also assert: counting started from the first
-    overlapped solid row (per Decision §3) — verify by placing the player such
-    that the contiguous mass *top* is in empty space above the player but the
-    count from the first overlapped row still exceeds the radius.
-15. **Cooldown gate.** Immediately after a rebound resolves to `solid`, set
+13. **Stuck case.** Inject a vertical column of solid tiles 8 tiles tall directly
+    above the player. Place the player at the bottom of a 16×16 solid pocket
+    such that the upward exit ray hits more than `STUCK_SEARCH_RADIUS` tiles of
+    solid. Release Shift while embedded → `shouldRebound()` returns
+    `{fire: true, stuck: true}`, state transitions to `stuck`.
+14. **Cooldown gate.** Immediately after a rebound resolves to `solid`, set
     `keys["ShiftLeft"] = true` → state stays `solid`, does not flip to
     `permeating` until `permeateCooldownTimer` reaches 0.
-16. **Goal collision.** Place player overlapping `goalRect` → after one step,
+15. **Goal collision.** Place player overlapping `goalRect` → after one step,
     state is `won`.
 
 ### Browser verification (the user's responsibility)
@@ -733,6 +630,32 @@ The deliverable response must include, in order:
 2. CONFIG markdown table.
 3. Full single-file HTML in one code block, with heavy comments in the physics
    and rebound sections.
-4. Smoke-harness results — one line per test (PASS/FAIL with the assertion
-   that fired on failure). All 16 tests in the Verification Plan must pass
-   before the deliverable is considered complete.
+4. And updated Plan.md with the lessons learned.
+
+---
+
+## Implementation Lessons Learned
+
+- Edge-triggered movement changes need a one-frame force skip. Jump press now leaves
+  `vy` exactly at `JUMP_VELOCITY`, jump release leaves it exactly at
+  `JUMP_CUT_VELOCITY`, and rebound trigger leaves it at `0`; gravity or buoyancy
+  starts on the following fixed step. This made the smoke tests deterministic
+  and the rebound feel less like a hidden impulse.
+- The top-half-only release latch must override the normal permeation center-pull.
+  If the center-pull remains active, a thin floor can recapture the player
+  instead of letting the head clear. The implemented latch applies normal gravity
+  until the body is fully out of solid, then returns to `solid`.
+- Ground probes must not count the same solid currently containing the player.
+  During rebound, `grounded` is true only when the current body is clear and the
+  1px probe below overlaps solid; otherwise the embedded rebound phase exits
+  immediately.
+- Stuck detection needs to count upward from the first solid row overlapped by
+  the player, not from the top of the contiguous mass. Counting from the top
+  under-reports sealed pockets because the first empty row is already just above
+  the mass.
+- Buoyant rebound movement must stay intangible while embedded in the mass.
+  Collision resumes after surfacing; otherwise the ascent is blocked by the next
+  row of the same multi-tile block before the player can reach the surface.
+- The smoke harness verified the required mechanics without a browser by
+  extracting the script, mocking canvas/DOM APIs, and driving `step(CONFIG.DT)`
+  with synthetic `keys`, `keyEdge`, and `keyReleased` input.
