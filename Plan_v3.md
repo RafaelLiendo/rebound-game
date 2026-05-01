@@ -475,33 +475,4 @@ The deliverable response must include, in order:
 2. CONFIG markdown table.
 3. Full single-file HTML in one code block, with heavy comments in the physics
    and rebound sections.
-4. Three suggested next steps.
-
----
-
-## Suggested Next Steps
-
-1. **Juice pass.** Particle bursts on rebound (orange sparks scaled by
-   `depthNorm`), red shockwave on stuck, screen-shake on big rebounds, trail
-   effect during permeation. Audio via Tone.js: oscillator chirp on jump,
-   filtered sweep on permeate, harmonic pluck on rebound, dissonant cluster on
-   stuck, victory arpeggio on win.
-
-2. **Add a third beat: horizontal wall-permeation.** Extend the goal area to
-   the right; place a tall wall *between* the Beat 2 high ledge and the new
-   goal. Player runs at the wall with Shift held, horizontal velocity carries
-   them through, releases on the far side onto the goal floor. Geometry to
-   verify:
-   - The wall must not span any Beat 2 dive column (cols 8-22) or it
-     re-introduces the constraint that limits two-beat scope.
-   - The wall must extend up high enough that jumping over isn't an
-     alternative (≥4 tiles tall above the floor).
-   - Goal floor must be on the far side of the wall at the same row as the
-     mid-ledge so the player exits onto solid ground.
-
-3. **Level editor and level select.** Move level data to JSON, add an editor
-   mode (click-toggle tile under cursor, drag-place spawn/goal, save/load to
-   localStorage), and a level-select menu progressing through 4-5 hand-designed
-   scenarios that show different mechanic interactions: chained rebounds,
-   stuck-recovery via deliberate re-permeation, permeating moving platforms,
-   wall-jump-into-permeate combos.
+4. And updated Plan.md with the lessons learned.
