@@ -631,3 +631,31 @@ The deliverable response must include, in order:
 3. Full single-file HTML in one code block, with heavy comments in the physics
    and rebound sections.
 4. And updated Plan.md with the lessons learned.
+
+---
+
+## Implementation Lessons Learned
+
+- Edge-triggered movement changes need a one-frame force skip. Jump press now leaves
+  `vy` exactly at `JUMP_VELOCITY`, jump release leaves it exactly at
+  `JUMP_CUT_VELOCITY`, and rebound trigger leaves it at `0`; gravity or buoyancy
+  starts on the following fixed step. This made the smoke tests deterministic
+  and the rebound feel less like a hidden impulse.
+- The top-half-only release latch must override the normal permeation center-pull.
+  If the center-pull remains active, a thin floor can recapture the player
+  instead of letting the head clear. The implemented latch applies normal gravity
+  until the body is fully out of solid, then returns to `solid`.
+- Ground probes must not count the same solid currently containing the player.
+  During rebound, `grounded` is true only when the current body is clear and the
+  1px probe below overlaps solid; otherwise the embedded rebound phase exits
+  immediately.
+- Stuck detection needs to count upward from the first solid row overlapped by
+  the player, not from the top of the contiguous mass. Counting from the top
+  under-reports sealed pockets because the first empty row is already just above
+  the mass.
+- Buoyant rebound movement must stay intangible while embedded in the mass.
+  Collision resumes after surfacing; otherwise the ascent is blocked by the next
+  row of the same multi-tile block before the player can reach the surface.
+- The smoke harness verified the required mechanics without a browser by
+  extracting the script, mocking canvas/DOM APIs, and driving `step(CONFIG.DT)`
+  with synthetic `keys`, `keyEdge`, and `keyReleased` input.
