@@ -364,64 +364,127 @@
     var shake = 0;
 
     // === LEVEL DATA ===
-    var LEVEL = [
-      "..............................",
-      "..............................",
-      "..............................",
-      "..............................",
-      "..............................",
-      "..............................",
-      "..............................",
-      "..............................",
-      "..............................",
-      "..............................",
-      "..............................",
-      "..............................",
-      "..............................",
-      "...........................G..",
-      "........................######",
-      "..............................",
-      "..............................",
-      "..............................",
-      "..............................",
-      "........######################",
-      "....##########################",
-      "........######################",
-      "........######################",
-      "....##########################",
-      "..............................",
-      "..............................",
-      "####..........................",
-      "..............................",
-      "..............................",
-      "....###.......................",
-      "..............................",
-      "..............................",
-      "####..........................",
-      "..............................",
-      "..............................",
-      "....###.......................",
-      "..............................",
-      "..............................",
-      "####..........................",
-      "..............................",
-      "..............................",
-      "....###..######...............",
-      "..............................",
-      ".S............................",
-      "##############################"
+    var LEVELS = [
+      {
+        name: "Rift Basin",
+        map: [
+          "..............................",
+          "..............................",
+          "..............................",
+          "..............................",
+          "..............................",
+          "..............................",
+          "..............................",
+          "..............................",
+          "..............................",
+          "..............................",
+          "..............................",
+          "..............................",
+          "..............................",
+          "...........................G..",
+          "........................######",
+          "..............................",
+          "..............................",
+          "..............................",
+          "..............................",
+          "........######################",
+          "....##########################",
+          "........######################",
+          "........######################",
+          "....##########################",
+          "..............................",
+          "..............................",
+          "####..........................",
+          "..............................",
+          "..............................",
+          "....###.......................",
+          "..............................",
+          "..............................",
+          "####..........................",
+          "..............................",
+          "..............................",
+          "....###.......................",
+          "..............................",
+          "..............................",
+          "####..........................",
+          "..............................",
+          "..............................",
+          "....###..######...............",
+          "..............................",
+          ".S............................",
+          "##############################"
+        ]
+      },
+      {
+        name: "Pressure Loom",
+        map: [
+          "..............................",
+          "..............................",
+          "..............................",
+          "..............................",
+          "..............................",
+          "..............................",
+          "..............................",
+          "..............................",
+          "..............................",
+          "..................######......",
+          "..............................",
+          "..............................",
+          "............#####.............",
+          ".........................G....",
+          "................########......",
+          "..............................",
+          "..................###.........",
+          "..............................",
+          "............######............",
+          "..............................",
+          "........################......",
+          "..............................",
+          "..................###.........",
+          "..............................",
+          "..............######..........",
+          "..............................",
+          "....####......................",
+          "..............................",
+          "..................####........",
+          "..............................",
+          "......######..................",
+          "..............................",
+          "................########......",
+          "..............................",
+          "....######....................",
+          "..............................",
+          "............####..............",
+          "..............................",
+          "####..........................",
+          "..............................",
+          "........######................",
+          "..............................",
+          "..................######......",
+          ".S............................",
+          "##############################"
+        ]
+      }
     ];
 
-    var ROWS = LEVEL.length;
-    var COLS = LEVEL[0].length;
-    var levelH = ROWS * TS;
-    var levelW = COLS * TS;
+    var currentLevelIndex = 0;
+    var LEVEL = LEVELS[currentLevelIndex].map;
+    var ROWS = 0;
+    var COLS = 0;
+    var levelH = 0;
+    var levelW = 0;
     var tiles = [];
     var spawnCell = { c: 1, r: 43, x: TS, y: 43 * TS };
     var goalRect = { x: 27 * TS, y: 13 * TS, w: TS, h: TS };
 
     function parseLevel() {
-      tiles = [];
+      ROWS = LEVEL.length;
+      COLS = LEVEL[0].length;
+      levelH = ROWS * TS;
+      levelW = COLS * TS;
+      tiles.length = 0;
+      spawnCell = { c: 1, r: Math.max(0, ROWS - 2), x: TS, y: Math.max(0, ROWS - 2) * TS };
+      goalRect = { x: Math.max(0, COLS - 3) * TS, y: Math.max(0, ROWS - 3) * TS, w: TS, h: TS };
       for (var r = 0; r < ROWS; r++) {
         tiles[r] = [];
         for (var c = 0; c < COLS; c++) {
@@ -432,7 +495,6 @@
         }
       }
     }
-    parseLevel();
 
     // === INPUT ===
     var keys = Object.create(null);
@@ -440,7 +502,7 @@
     var keyReleased = Object.create(null);
 
     window.addEventListener("keydown", function (ev) {
-      if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space", "ShiftLeft", "ShiftRight", "ControlLeft", "ControlRight", "KeyA", "KeyD", "KeyW", "KeyR"].indexOf(ev.code) >= 0) {
+      if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space", "Enter", "ShiftLeft", "ShiftRight", "ControlLeft", "ControlRight", "KeyA", "KeyD", "KeyW", "KeyR"].indexOf(ev.code) >= 0) {
         ev.preventDefault();
       }
       if (!keys[ev.code]) keyEdge[ev.code] = true;
@@ -448,7 +510,7 @@
     });
 
     window.addEventListener("keyup", function (ev) {
-      if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space", "ShiftLeft", "ShiftRight", "ControlLeft", "ControlRight", "KeyA", "KeyD", "KeyW", "KeyR"].indexOf(ev.code) >= 0) {
+      if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space", "Enter", "ShiftLeft", "ShiftRight", "ControlLeft", "ControlRight", "KeyA", "KeyD", "KeyW", "KeyR"].indexOf(ev.code) >= 0) {
         ev.preventDefault();
       }
       keys[ev.code] = false;
@@ -526,6 +588,24 @@
       ripples.length = 0;
       shake = 0;
       probeGrounded();
+    }
+
+    function loadLevel(index) {
+      var nextIndex = Math.max(0, Math.min(LEVELS.length - 1, index));
+      currentLevelIndex = nextIndex;
+      LEVEL = LEVELS[currentLevelIndex].map;
+      parseLevel();
+      spawnPlayer();
+    }
+
+    function isFinalLevel() {
+      return currentLevelIndex >= LEVELS.length - 1;
+    }
+
+    function nextLevel() {
+      if (isFinalLevel()) return false;
+      loadLevel(currentLevelIndex + 1);
+      return true;
     }
 
     // === PHYSICS HELPERS ===
@@ -846,9 +926,16 @@
       player.flashTimer = Math.max(0, player.flashTimer - dt);
       updateEffects(dt);
 
-      if (keyEdge.KeyR) spawnPlayer();
+      if (keyEdge.KeyR) {
+        loadLevel(currentLevelIndex);
+        clearEdges();
+        return;
+      }
 
       if (player.state === "won") {
+        if (keyEdge.Space || keyEdge.Enter) {
+          nextLevel();
+        }
         clearEdges();
         return;
       }
@@ -1369,7 +1456,9 @@
       } else if (player.state === "stuck") {
         message = "stuck";
       } else if (player.won) {
-        message = "stage completed";
+        message = isFinalLevel() ? "all rifts stable" : "press Space for next";
+      } else {
+        message = (currentLevelIndex + 1) + "/" + LEVELS.length + " " + LEVELS[currentLevelIndex].name;
       }
 
       if (stateLabel) {
@@ -1381,6 +1470,7 @@
     }
 
     function drawWin() {
+      var final = isFinalLevel();
       ctx.fillStyle = "rgba(4, 5, 16, 0.72)";
       ctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
       ctx.fillStyle = "#d8b4ff";
@@ -1388,11 +1478,11 @@
       ctx.textAlign = "center";
       ctx.shadowColor = "#ff5cf4";
       ctx.shadowBlur = 18;
-      ctx.fillText("Rift Complete", CONFIG.VIEW_W / 2, CONFIG.VIEW_H / 2 - 12);
+      ctx.fillText(final ? "All Rifts Stabilized" : "Rift Complete", CONFIG.VIEW_W / 2, CONFIG.VIEW_H / 2 - 12);
       ctx.shadowBlur = 0;
       ctx.fillStyle = "#f6f3ff";
       ctx.font = "18px ui-sans-serif, system-ui";
-      ctx.fillText("Press R to play again", CONFIG.VIEW_W / 2, CONFIG.VIEW_H / 2 + 30);
+      ctx.fillText(final ? "Press R to restart" : "Press Space for next rift", CONFIG.VIEW_W / 2, CONFIG.VIEW_H / 2 + 30);
       ctx.textAlign = "left";
     }
 
@@ -1431,20 +1521,25 @@
       if (player.won) drawWin();
     }
 
-    spawnPlayer();
+    loadLevel(0);
     requestAnimationFrame(loop);
 
     window.gameInternals = {
       CONFIG: CONFIG,
-      LEVEL: LEVEL,
-      tiles: tiles,
+      LEVELS: LEVELS,
+      get LEVEL() { return LEVEL; },
+      get currentLevelIndex() { return currentLevelIndex; },
+      get tiles() { return tiles; },
       player: player,
       keys: keys,
       keyEdge: keyEdge,
       keyReleased: keyReleased,
-      spawnCell: spawnCell,
-      goalRect: goalRect,
+      get spawnCell() { return spawnCell; },
+      get goalRect() { return goalRect; },
       parseLevel: parseLevel,
+      loadLevel: loadLevel,
+      nextLevel: nextLevel,
+      isFinalLevel: isFinalLevel,
       spawnPlayer: spawnPlayer,
       step: step,
       clearEdges: clearEdges,

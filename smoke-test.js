@@ -76,6 +76,75 @@ function assert(cond, msg) {
   if (!cond) throw new Error(msg);
 }
 
+function assertNear(actual, expected, msg) {
+  if (Math.abs(actual - expected) > 0.001) {
+    throw new Error(msg + " expected " + expected + ", got " + actual);
+  }
+}
+
+function completeCurrentLevel(g) {
+  setPlayer(g, g.goalRect.x, g.goalRect.y, "solid");
+  step(g);
+  assert(g.player.won === true, "placing player on the goal did not complete the level");
+}
+
+function testLoadLevelRecalculatesMap() {
+  const g = makeGame();
+  const ts = g.CONFIG.TILE_SIZE;
+
+  assert(g.LEVELS.length >= 2, "game does not expose multiple levels");
+  assert(g.currentLevelIndex === 0, "game did not start on level 0");
+  assert(g.tiles.length === g.LEVEL.length, "initial tiles do not match active level height");
+
+  g.loadLevel(1);
+
+  assert(g.currentLevelIndex === 1, "loadLevel did not update the current level index");
+  assert(g.LEVEL === g.LEVELS[1].map, "loadLevel did not update the active map");
+  assert(g.tiles.length === g.LEVEL.length, "tiles were not rebuilt for the loaded level");
+  assert(g.tiles.every((row) => row.length === g.LEVEL[0].length), "loaded level tile rows have inconsistent widths");
+  assert(g.spawnCell.c === 1 && g.spawnCell.r === 43, "loaded level spawn was not parsed");
+  assert(g.goalRect.x === 25 * ts && g.goalRect.y === 13 * ts, "loaded level goal was not parsed");
+}
+
+function testResetRestartsCurrentLevel() {
+  const g = makeGame();
+  g.loadLevel(1);
+  g.player.x = 500;
+  g.player.y = 200;
+
+  press(g, "KeyR");
+  step(g);
+
+  assert(g.currentLevelIndex === 1, "reset changed the current level");
+  assert(g.player.won === false, "reset left the player in a won state");
+  assertNear(g.player.x, g.spawnCell.x + (g.CONFIG.TILE_SIZE - g.CONFIG.PLAYER_W) / 2, "reset did not restore spawn x");
+  assertNear(g.player.y, (g.spawnCell.r + 1) * g.CONFIG.TILE_SIZE - g.CONFIG.PLAYER_H, "reset did not restore spawn y");
+}
+
+function testWinningAdvancesToNextLevel() {
+  const g = makeGame();
+  completeCurrentLevel(g);
+
+  press(g, "Space");
+  step(g);
+
+  assert(g.currentLevelIndex === 1, "Space on win screen did not advance to the next level");
+  assert(g.player.won === false, "advanced level started in a won state");
+}
+
+function testFinalLevelDoesNotAdvancePastEnd() {
+  const g = makeGame();
+  const finalIndex = g.LEVELS.length - 1;
+  g.loadLevel(finalIndex);
+  completeCurrentLevel(g);
+
+  press(g, "Space");
+  step(g);
+
+  assert(g.currentLevelIndex === finalIndex, "final level advanced past the end");
+  assert(g.player.won === true, "final level did not remain on the completion screen");
+}
+
 function testAutoAssistClimbsTenTileStack() {
   const g = makeGame();
 
@@ -185,6 +254,10 @@ function testBlockedUpwardEscapeBecomesStuck() {
 }
 
 const tests = [
+  ["load level recalculates map", testLoadLevelRecalculatesMap],
+  ["reset restarts current level", testResetRestartsCurrentLevel],
+  ["winning advances to next level", testWinningAdvancesToNextLevel],
+  ["final level stops at end", testFinalLevelDoesNotAdvancePastEnd],
   ["auto assist climbs ten 2-gap tiles", testAutoAssistClimbsTenTileStack],
   ["manual queue consumes on surface", testManualQueueConsumesOnSurface],
   ["upper-body-only release waits until clear", testUpperBodyOnlyReleaseDoesNotRebound],
