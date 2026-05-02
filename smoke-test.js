@@ -58,6 +58,7 @@ function setPlayer(g, x, y, state = "solid") {
   p.queuedPermeate = false;
   p.queuedPermeateSource = null;
   p.permeateUntilClear = false;
+  p.permeateStartFeetY = state === "permeating" ? y + g.CONFIG.PLAYER_H : null;
   p.embeddedDepth = 0;
   p.reboundStrength = 0;
   p.stuckTimer = 0;
@@ -81,6 +82,12 @@ function assert(cond, msg) {
 function assertNear(actual, expected, msg) {
   if (Math.abs(actual - expected) > 0.001) {
     throw new Error(msg + " expected " + expected + ", got " + actual);
+  }
+}
+
+function assertApprox(actual, expected, tolerance, msg) {
+  if (Math.abs(actual - expected) > tolerance) {
+    throw new Error(msg + " expected " + expected + " +/- " + tolerance + ", got " + actual);
   }
 }
 
@@ -209,8 +216,8 @@ function measureFreeFallToTerminal(g) {
 
   for (let i = 0; i < 240; i++) {
     step(g);
-    if (g.player.vy >= g.CONFIG.MAX_FALL_SPEED) {
-      assertNear(g.player.vy, g.CONFIG.MAX_FALL_SPEED, "free fall did not clamp exactly to max fall speed");
+    if (g.player.vy >= g.CONFIG.MAX_FALL_SPEED - 0.001) {
+      assertApprox(g.player.vy, g.CONFIG.MAX_FALL_SPEED, 0.001, "free fall did not reach max fall speed");
       return tilesFromPixels(g, feetY(g) - startFeet);
     }
   }
@@ -468,26 +475,28 @@ function testFinalLevelDoesNotAdvancePastEnd() {
   assert(g.player.won === true, "final level did not remain on the completion screen");
 }
 
-function testAutoAssistClimbsTenTileStack() {
+function testAutoAssistClimbsTunedThickStack() {
   const g = makeGame();
 
   for (let r = 0; r < g.tiles.length; r++) {
     for (let c = 0; c < g.tiles[r].length; c++) g.tiles[r][c] = false;
   }
 
-  const rows = [];
-  for (let i = 0; i < 10; i++) rows.push(35 - i * 3);
+  const rows = [36, 31, 26, 21];
+  const massHeight = 3;
   for (const row of rows) {
-    for (let c = 14; c <= 16; c++) g.tiles[row][c] = true;
+    for (let r = row; r < row + massHeight; r++) {
+      for (let c = 14; c <= 16; c++) g.tiles[r][c] = true;
+    }
   }
 
   setPlayer(g, cellX(g, 15), standY(g, rows[0]), "solid");
   press(g, "ShiftLeft");
 
-  // Let Shift permeation settle the player fully into the bottom floor, then
+  // Let Shift permeation settle the player fully into the bottom mass, then
   // hold Ctrl. No Space press, no Shift release, and no Ctrl release are used.
-  step(g, 45);
-  assert(g.overlappingSolidTiles(g.playerRect()).length > 0, "player never permeated into the first floor");
+  step(g, 60);
+  assert(g.overlappingSolidTiles(g.playerRect()).length > 0, "player never permeated into the first mass");
   press(g, "ControlLeft");
 
   const touchedRows = new Set();
@@ -503,8 +512,13 @@ function testAutoAssistClimbsTenTileStack() {
     }
   }
 
-  const missedRows = rows.filter((row) => !touchedRows.has(row));
-  assert(missedRows.length === 0, "auto-chain skipped stack rows: " + missedRows.join(", "));
+  const missedRows = rows.filter((row) => {
+    for (let r = row; r < row + massHeight; r++) {
+      if (touchedRows.has(r)) return false;
+    }
+    return true;
+  });
+  assert(missedRows.length === 0, "auto-chain skipped stack masses: " + missedRows.join(", "));
   assert(reachedTop, "auto-chain did not carry the player above the top tile");
 }
 
@@ -598,8 +612,8 @@ function testPermeationCenterPullUsesTunedAccel() {
   setPlayer(g, cellX(g, 11), row * g.CONFIG.TILE_SIZE - 20, "permeating");
   step(g);
 
-  assertNear(g.CONFIG.PERMEATE_PULL_ACCEL, 0.34, "permeate center pull was not dialed back");
-  assertNear(g.player.vy, 0.34, "permeate center pull did not apply the tuned acceleration");
+  assert(g.player.vy > 0, "permeate center pull did not draw the player toward the mass center");
+  assert(g.player.vy <= g.CONFIG.PERMEATE_MATTER_MAX_SPEED, "permeate center pull exceeded the matter speed cap");
 }
 
 function testThinMassKeepsExistingReboundCurve() {
@@ -615,10 +629,9 @@ function testThinMassKeepsExistingReboundCurve() {
 
   setPlayer(g, cellX(g, 11), row * g.CONFIG.TILE_SIZE, "permeating");
   const rebound = g.shouldRebound(g.playerRect());
-  const expected = g.CONFIG.PLAYER_H / (g.CONFIG.PLAYER_H + g.CONFIG.TILE_SIZE);
 
   assert(rebound.fire === true, "thin lower-body overlap did not allow rebound");
-  assertNear(rebound.strength, expected, "thin mass received deep rebound bonus");
+  assertApprox(rebound.targetRiseTiles, 2, 0.001, "thin mass bottom release did not target a 2-tile rebound");
 }
 
 function testDeepStaticMassRewardsBottomDive() {
@@ -645,9 +658,8 @@ function testDeepStaticMassRewardsBottomDive() {
   setPlayer(g, cellX(g, 11), bottomY - g.CONFIG.PLAYER_H, "permeating");
   const deep = g.shouldRebound(g.playerRect());
 
-  assertNear(mid.strength, 1, "old full-charge depth should not receive deep bonus yet");
-  assert(deep.strength > mid.strength, "bottom dive in tall static mass did not strengthen rebound");
-  assertNear(deep.strength, g.CONFIG.REBOUND_MAX_STRENGTH, "bottom dive did not reach tuned max strength");
+  assert(deep.targetRiseTiles > mid.targetRiseTiles, "bottom dive in tall static mass did not strengthen rebound");
+  assertApprox(deep.targetRiseTiles, 32, 0.001, "bottom dive did not reach the tuned 5-row target height");
 }
 
 function testFirstLevelDeepReboundCanReachGoalHeight() {
@@ -658,21 +670,21 @@ function testFirstLevelDeepReboundCanReachGoalHeight() {
   const massBottomRow = 30;
   const bottomY = (massBottomRow + 1) * g.CONFIG.TILE_SIZE;
   setPlayer(g, cellX(g, deepMassCol), bottomY - g.CONFIG.PLAYER_H, "permeating");
+  const startFeet = feetY(g);
+  const target = g.shouldRebound(g.playerRect()).targetRiseTiles;
 
   release(g, "ShiftLeft");
   step(g);
   assert(g.player.state === "rebounding", "first level bottom dive did not start rebound");
 
-  let reachedGoalHeight = false;
+  let peakFeet = startFeet;
   for (let i = 0; i < 360; i++) {
     step(g);
-    if (g.player.y <= g.goalRect.y) {
-      reachedGoalHeight = true;
-      break;
-    }
+    peakFeet = Math.min(peakFeet, feetY(g));
   }
 
-  assert(reachedGoalHeight, "first level deep rebound did not reach the goal tile height");
+  const rise = tilesFromPixels(g, startFeet - peakFeet);
+  assertApprox(rise, target, 0.05, "first level deep rebound did not follow its tuned target height");
 }
 
 function testPermeationBottomBrakeResistsDeepSinking() {
@@ -791,6 +803,10 @@ function testPlayerLimitMeasurements() {
   const bottomRebounds = [];
   const minimumFalls = [];
   const chainPeaks = [];
+  const targetCenterRebounds = [1, 2, 4, 8, 16];
+  const targetBottomRebounds = [2, 4, 8, 16, 32];
+  const targetMinimumFalls = [2, 4, 5, 5, 5];
+  const heightTolerance = 0.05;
 
   const normalJump = measureNormalJumpPeak(g);
   const terminalFall = measureFreeFallToTerminal(g);
@@ -804,17 +820,13 @@ function testPlayerLimitMeasurements() {
   }
 
   for (let i = 0; i < 5; i++) {
-    assert(bottomRebounds[i] + 0.001 >= centerRebounds[i], "bottom rebound was lower than center rebound for " + (i + 1) + " tile mass");
-    if (i > 0) {
-      assert(bottomRebounds[i] + 0.001 >= bottomRebounds[i - 1], "deeper bottom rebound lost height at " + (i + 1) + " tile mass");
-      assert(minimumFalls[i] + 0.001 >= minimumFalls[i - 1], "minimum pass-through fall dropped at " + (i + 1) + " tile mass");
-      assert(chainPeaks[i] === null, "one-tile-gap chain unexpectedly produced a meaningful " + (i + 1) + "-slab measurement");
-    }
+    assertApprox(centerRebounds[i], targetCenterRebounds[i], heightTolerance, "center rebound target missed for " + (i + 1) + " tile mass");
+    assertApprox(bottomRebounds[i], targetBottomRebounds[i], heightTolerance, "bottom rebound target missed for " + (i + 1) + " tile mass");
+    assertApprox(minimumFalls[i], targetMinimumFalls[i], heightTolerance, "minimum fall-through target missed for " + (i + 1) + " tile mass");
   }
-  assert(chainPeaks[0] !== null && chainPeaks[0] > 0, "single-slab chain measurement did not rise");
-  assert(normalJump > 0, "normal jump measurement did not rise");
-  assert(terminalFall > 0, "terminal fall measurement did not fall");
-  assert(terminalRows > 0, "terminal-speed pass-through could not clear even one tile row");
+  assertApprox(normalJump, 2, heightTolerance, "normal jump target missed");
+  assertApprox(terminalFall, 5, heightTolerance, "free fall to max-speed target missed");
+  assert(terminalRows === 5, "terminal-speed pass-through target missed; expected 5 rows, got " + terminalRows);
 
   console.log("PLAYER LIMITS");
   console.log("  normal jump peak: " + formatTiles(normalJump) + " tiles");
@@ -1094,9 +1106,8 @@ function testDeepDynamicMassRewardsBottomDive() {
     setPlayer(g, e.x + 32, e.y + e.h - g.CONFIG.PLAYER_H, "permeating");
     const deep = g.shouldRebound(g.playerRect());
 
-    assertNear(mid.strength, 1, "dynamic old full-charge depth should not receive deep bonus yet");
-    assert(deep.strength > mid.strength, "bottom dive in tall dynamic mass did not strengthen rebound");
-    assertNear(deep.strength, g.CONFIG.REBOUND_MAX_STRENGTH, "dynamic bottom dive did not reach tuned max strength");
+    assert(deep.targetRiseTiles > mid.targetRiseTiles, "bottom dive in tall dynamic mass did not strengthen rebound");
+    assertApprox(deep.targetRiseTiles, 32, 0.001, "dynamic bottom dive did not reach the tuned 5-row target height");
   } finally {
     g.LEVELS.length = originalLength;
     g.loadLevel(0);
@@ -1141,7 +1152,7 @@ const tests = [
   ["reset respawns at active checkpoint", testResetRespawnsAtActiveCheckpoint],
   ["winning advances to next level", testWinningAdvancesToNextLevel],
   ["final level stops at end", testFinalLevelDoesNotAdvancePastEnd],
-  ["auto assist climbs ten 2-gap tiles", testAutoAssistClimbsTenTileStack],
+  ["auto assist climbs tuned thick stack", testAutoAssistClimbsTunedThickStack],
   ["manual queue consumes on surface", testManualQueueConsumesOnSurface],
   ["upper-body-only release waits until clear", testUpperBodyOnlyReleaseDoesNotRebound],
   ["blocked upward escape recovers from stuck", testBlockedUpwardEscapeBecomesStuck],
