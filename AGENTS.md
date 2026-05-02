@@ -41,6 +41,9 @@ There is no build step. `index.html` can be opened directly in a browser.
   - `G` = goal
 - Multiple levels are defined in `LEVELS`. Use `loadLevel(index)` rather than
   mutating map globals directly.
+- Different levels may have different row and column counts. Within a single
+  level, every map row must have the same number of columns; `parseLevel()`
+  throws an error for uneven row widths.
 - If level switching changes, keep `window.gameInternals` useful for tests by
   exposing live getters for active level data.
 
@@ -78,4 +81,5 @@ Add smoke coverage when changing:
 - Use ASCII unless an existing file clearly calls for otherwise.
 - Avoid broad refactors while tuning mechanics.
 - Keep HUD text short enough to fit the existing overlay.
-- When adding levels, preserve consistent row widths within each map.
+- When adding levels, preserve consistent row widths within each map, even if
+  the next level uses a different overall size.

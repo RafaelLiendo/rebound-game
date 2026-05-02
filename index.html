@@ -480,6 +480,14 @@
     function parseLevel() {
       ROWS = LEVEL.length;
       COLS = LEVEL[0].length;
+      for (var rowIndex = 1; rowIndex < ROWS; rowIndex++) {
+        if (LEVEL[rowIndex].length !== COLS) {
+          throw new Error(
+            "Level " + (currentLevelIndex + 1) + " row " + (rowIndex + 1) +
+            " has " + LEVEL[rowIndex].length + " columns; expected " + COLS + "."
+          );
+        }
+      }
       levelH = ROWS * TS;
       levelW = COLS * TS;
       tiles.length = 0;

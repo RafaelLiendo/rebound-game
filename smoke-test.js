@@ -106,6 +106,31 @@ function testLoadLevelRecalculatesMap() {
   assert(g.goalRect.x === 25 * ts && g.goalRect.y === 13 * ts, "loaded level goal was not parsed");
 }
 
+function testLoadLevelRejectsUnevenRows() {
+  const g = makeGame();
+  const originalLength = g.LEVELS.length;
+  g.LEVELS.push({
+    name: "Broken Rows",
+    map: [
+      "S..",
+      "##",
+      "..G"
+    ]
+  });
+
+  let failed = false;
+  try {
+    g.loadLevel(originalLength);
+  } catch (err) {
+    failed = /row 2/.test(err.message) && /expected 3/.test(err.message);
+  } finally {
+    g.LEVELS.pop();
+    g.loadLevel(0);
+  }
+
+  assert(failed, "loadLevel did not reject uneven row widths");
+}
+
 function testResetRestartsCurrentLevel() {
   const g = makeGame();
   g.loadLevel(1);
@@ -255,6 +280,7 @@ function testBlockedUpwardEscapeBecomesStuck() {
 
 const tests = [
   ["load level recalculates map", testLoadLevelRecalculatesMap],
+  ["load level rejects uneven rows", testLoadLevelRejectsUnevenRows],
   ["reset restarts current level", testResetRestartsCurrentLevel],
   ["winning advances to next level", testWinningAdvancesToNextLevel],
   ["final level stops at end", testFinalLevelDoesNotAdvancePastEnd],
