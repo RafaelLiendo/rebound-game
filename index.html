@@ -1361,15 +1361,15 @@
         won: "#d8b4ff"
       }[player.won ? "won" : player.state];
       var charge = clamp((player.embeddedDepth || 0) / (CONFIG.PLAYER_H + TS), 0, 1);
-      var message = "night form";
+      var message = "solid state";
       if (player.state === "permeating") {
-        message = player.permeateUntilClear ? "phasing through matter" : "release psychic rebound";
+        message = player.permeateUntilClear ? "phasing through" : "release to rebound";
       } else if (player.state === "rebounding") {
-        message = "cosmic surge";
+        message = "up, up and away!";
       } else if (player.state === "stuck") {
-        message = "void pressure";
+        message = "stuck";
       } else if (player.won) {
-        message = "rift stabilized";
+        message = "stage completed";
       }
 
       if (stateLabel) {
