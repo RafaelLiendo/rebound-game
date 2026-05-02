@@ -88,6 +88,7 @@ function setPlayer(g, x, y, state = "solid") {
   p.reboundStrength = 0;
   p.reboundTargetRiseTiles = 0;
   p.reboundLaunchVelocity = 0;
+  p.reboundCarryVelocity = 0;
   p.reboundExitY = null;
   p.stuckTimer = 0;
   p.flashTimer = 0;
@@ -176,26 +177,35 @@ function measurePeakFeetRise(g, setup, maxFrames = 360) {
   return tilesFromPixels(g, startFeet - peakFeet);
 }
 
-function measureCurrentReboundPeakFromExit(g, maxFrames = 480) {
-  const rebound = g.shouldRebound(g.playerRect());
-  assert(rebound.fire === true, "rebound measurement did not start from a valid release");
-  assert(rebound.exitY !== null && rebound.exitY !== undefined, "rebound measurement did not provide a planned exit");
-
-  release(g, "ShiftLeft");
+function activateRebound(g, mode) {
+  if (mode === "ctrl+shift") {
+    g.keys.ShiftLeft = true;
+    g.keys.ControlLeft = true;
+  } else {
+    release(g, "ShiftLeft");
+  }
   step(g);
-  assert(g.player.state !== "stuck", "rebound measurement became stuck on release");
+}
+
+function measureCurrentReboundPeakFromExit(g, maxFrames = 480, mode = "release") {
+  const rebound = g.shouldRebound(g.playerRect());
+  assert(rebound.fire === true, mode + " rebound measurement did not start from a valid release");
+  assert(rebound.exitY !== null && rebound.exitY !== undefined, mode + " rebound measurement did not provide a planned exit");
+
+  activateRebound(g, mode);
+  assert(g.player.state !== "stuck", mode + " rebound measurement became stuck on activation");
 
   let exited = false;
   let peakY = Infinity;
   for (let i = 0; i < maxFrames; i++) {
     step(g);
-    assert(g.player.state !== "stuck", "rebound measurement became stuck after release");
+    assert(g.player.state !== "stuck", mode + " rebound measurement became stuck after activation");
     if (!exited && g.player.y <= rebound.exitY + 0.001) exited = true;
     if (exited) peakY = Math.min(peakY, g.player.y);
     if (exited && g.player.vy > 0 && g.player.y > peakY + 5) break;
   }
 
-  assert(exited, "rebound measurement never reached the planned exit");
+  assert(exited, mode + " rebound measurement never reached the planned exit");
   return {
     rebound,
     riseTiles: tilesFromPixels(g, rebound.exitY - peakY)
@@ -212,14 +222,14 @@ function measureNormalJumpPeak(g) {
   }, 180);
 }
 
-function measureReboundPeak(g, massRows, releasePoint) {
+function measureReboundPeak(g, massRows, releasePoint, mode = "release") {
   const fixture = buildMeasurementFixture(g, { topRow: 24, leftCol: 10, massRows });
   const releaseFeet = releasePoint === "center" ?
     fixture.topY + (fixture.bottomY - fixture.topY) / 2 :
     fixture.bottomY;
 
   setPlayer(g, fixture.x, releaseFeet - g.CONFIG.PLAYER_H, "permeating");
-  return measureCurrentReboundPeakFromExit(g, 480).riseTiles;
+  return measureCurrentReboundPeakFromExit(g, 480, mode).riseTiles;
 }
 
 function simulatePassThrough(g, massRows, fallTiles, maxFrames = 360) {
@@ -812,21 +822,30 @@ function testBugOneAutoChainReachesTop() {
   press(g, "ControlLeft");
 
   let chainStarted = false;
-  const chainExitSpeeds = [];
+  const chainExits = [];
   let previousState = g.player.state;
   for (let i = 0; i < 2400; i++) {
     step(g);
     if (previousState === "rebounding" && g.player.state === "permeating") {
-      chainExitSpeeds.push(g.player.vy);
+      chainExits.push({
+        speed: g.player.vy,
+        launch: g.player.reboundLaunchVelocity,
+        target: g.player.reboundTargetRiseTiles
+      });
     }
     previousState = g.player.state;
     if (g.player.state === "permeating" || g.player.state === "rebounding") chainStarted = true;
     assert(g.player.state !== "stuck", "bug 1 chain entered stuck recovery");
     assert(!chainStarted || g.player.state !== "solid", "bug 1 chain became solid before reaching the top");
     if (g.player.won) {
-      assert(chainExitSpeeds.length >= 4, "bug 1 chain did not record enough rebound exits");
-      for (let j = 0; j < Math.min(4, chainExitSpeeds.length); j++) {
-        assert(chainExitSpeeds[j] <= -g.CONFIG.REBOUND_SURFACE_SPEED + 0.001, "bug 1 chain exit velocity collapsed to " + chainExitSpeeds[j].toFixed(3));
+      assert(chainExits.length >= 4, "bug 1 chain did not record enough rebound exits");
+      for (let j = 0; j < Math.min(4, chainExits.length); j++) {
+        assert(chainExits[j].target >= 1, "bug 1 chain exit " + j + " lost its rebound target");
+        assert(
+          chainExits[j].speed <= -chainExits[j].launch + 0.001,
+          "bug 1 chain exit " + j + " velocity collapsed to " + chainExits[j].speed.toFixed(3) +
+            " below launch " + chainExits[j].launch.toFixed(3)
+        );
       }
       return;
     }
@@ -844,30 +863,32 @@ function testBugTwoTallMassReboundsOnce() {
   const massTopRow = 17;
   const massBottomRow = 37;
   const bottomY = (massBottomRow + 1) * g.CONFIG.TILE_SIZE;
-  setPlayer(g, cellX(g, 7), bottomY - g.CONFIG.PLAYER_H, "permeating");
+  for (const mode of ["release", "ctrl+shift"]) {
+    setPlayer(g, cellX(g, 7), bottomY - g.CONFIG.PLAYER_H, "permeating");
 
-  const rebound = g.shouldRebound(g.playerRect());
-  assert(rebound.fire === true, "bug 2 tall mass did not allow rebound");
-  assertApprox(rebound.targetRiseTiles, 32, 0.001, "bug 2 tall mass did not use capped 5-row rebound tuning");
+    const rebound = g.shouldRebound(g.playerRect());
+    assert(rebound.fire === true, "bug 2 tall mass did not allow " + mode + " rebound");
+    assertApprox(rebound.targetRiseTiles, 32, 0.001, "bug 2 tall mass did not use capped 5-row " + mode + " rebound tuning");
 
-  release(g, "ShiftLeft");
-  let reboundStarts = 0;
-  let exited = false;
-  let peakY = Infinity;
-  let previousState = g.player.state;
-  for (let i = 0; i < 900; i++) {
-    step(g);
-    if (previousState !== "rebounding" && g.player.state === "rebounding") reboundStarts++;
-    previousState = g.player.state;
-    assert(g.player.state !== "stuck", "bug 2 tall mass entered stuck recovery");
-    if (!exited && g.player.y <= rebound.exitY + 0.001) exited = true;
-    if (exited) peakY = Math.min(peakY, g.player.y);
-    if (exited && g.player.vy > 0 && g.player.y > peakY + 5) break;
+    activateRebound(g, mode);
+    let reboundStarts = g.player.state === "rebounding" ? 1 : 0;
+    let exited = false;
+    let peakY = Infinity;
+    let previousState = g.player.state;
+    for (let i = 0; i < 900; i++) {
+      step(g);
+      if (previousState !== "rebounding" && g.player.state === "rebounding") reboundStarts++;
+      previousState = g.player.state;
+      assert(g.player.state !== "stuck", "bug 2 " + mode + " tall mass entered stuck recovery");
+      if (!exited && g.player.y <= rebound.exitY + 0.001) exited = true;
+      if (exited) peakY = Math.min(peakY, g.player.y);
+      if (exited && g.player.vy > 0 && g.player.y > peakY + 5) break;
+    }
+
+    assert(exited, "bug 2 " + mode + " tall mass rebound did not reach its planned exit");
+    assert(reboundStarts === 1, "bug 2 " + mode + " tall mass rebounded " + reboundStarts + " times instead of once");
+    assertApprox(tilesFromPixels(g, rebound.exitY - peakY), 32, 0.05, "bug 2 " + mode + " bottom rebound did not rise 32 tiles from the top exit");
   }
-
-  assert(exited, "bug 2 tall mass rebound did not reach its planned exit");
-  assert(reboundStarts === 1, "bug 2 tall mass rebounded " + reboundStarts + " times instead of once");
-  assertApprox(tilesFromPixels(g, rebound.exitY - peakY), 32, 0.05, "bug 2 bottom rebound did not rise 32 tiles from the top exit");
 }
 
 function testAutoAssistClimbsTunedThickStack() {
@@ -989,8 +1010,7 @@ function testBlockedUpwardEscapeBecomesStuck() {
   for (let c = 18; c <= 20; c++) g.tiles[18][c] = true;
 
   setPlayer(g, cellX(g, 19), 29 * g.CONFIG.TILE_SIZE, "permeating");
-  release(g, "ShiftLeft");
-  step(g);
+  activateRebound(g, "release");
 
   for (let i = 0; i < 120 && g.player.state !== "stuck"; i++) step(g);
   assert(g.player.state === "stuck", "blocked upward escape did not enter stuck state");
@@ -1030,11 +1050,16 @@ function testThinMassKeepsExistingReboundCurve() {
   const row = 20;
   for (let c = 10; c <= 12; c++) g.tiles[row][c] = true;
 
-  setPlayer(g, cellX(g, 11), row * g.CONFIG.TILE_SIZE, "permeating");
-  const rebound = g.shouldRebound(g.playerRect());
+  for (const mode of ["release", "ctrl+shift"]) {
+    setPlayer(g, cellX(g, 11), row * g.CONFIG.TILE_SIZE, "permeating");
+    const rebound = g.shouldRebound(g.playerRect());
 
-  assert(rebound.fire === true, "thin lower-body overlap did not allow rebound");
-  assertApprox(rebound.targetRiseTiles, 2, 0.001, "thin mass bottom release did not target a 2-tile rebound");
+    assert(rebound.fire === true, "thin lower-body overlap did not allow " + mode + " rebound");
+    assertApprox(rebound.targetRiseTiles, 2, 0.001, "thin mass bottom " + mode + " did not target a 2-tile rebound");
+
+    const measured = measureCurrentReboundPeakFromExit(g, 480, mode);
+    assertApprox(measured.riseTiles, 2, 0.05, "thin mass bottom " + mode + " did not rise 2 tiles from the planned exit");
+  }
 }
 
 function testDeepStaticMassRewardsBottomDive() {
@@ -1080,16 +1105,18 @@ function testTallStaticMassReboundsFromExit() {
   const bottomY = (bottomRow + 1) * g.CONFIG.TILE_SIZE;
   const centerFeet = topY + (bottomY - topY) / 2;
 
-  setPlayer(g, cellX(g, 11), centerFeet - g.CONFIG.PLAYER_H, "permeating");
-  const center = measureCurrentReboundPeakFromExit(g, 900);
+  for (const mode of ["release", "ctrl+shift"]) {
+    setPlayer(g, cellX(g, 11), centerFeet - g.CONFIG.PLAYER_H, "permeating");
+    const center = measureCurrentReboundPeakFromExit(g, 900, mode);
 
-  setPlayer(g, cellX(g, 11), bottomY - g.CONFIG.PLAYER_H, "permeating");
-  const bottom = measureCurrentReboundPeakFromExit(g, 900);
+    setPlayer(g, cellX(g, 11), bottomY - g.CONFIG.PLAYER_H, "permeating");
+    const bottom = measureCurrentReboundPeakFromExit(g, 900, mode);
 
-  assertApprox(center.rebound.targetRiseTiles, 32, 0.001, "tall mass center release did not use capped rebound tuning");
-  assertApprox(bottom.rebound.targetRiseTiles, 32, 0.001, "tall mass bottom release did not use capped rebound tuning");
-  assertApprox(bottom.riseTiles, 32, 0.05, "tall mass bottom release did not rise 32 tiles from the planned exit");
-  assert(bottom.riseTiles >= center.riseTiles - 0.05, "tall mass bottom release rose lower than center release");
+    assertApprox(center.rebound.targetRiseTiles, 32, 0.001, "tall mass center " + mode + " did not use capped rebound tuning");
+    assertApprox(bottom.rebound.targetRiseTiles, 32, 0.001, "tall mass bottom " + mode + " did not use capped rebound tuning");
+    assertApprox(center.riseTiles, 32, 0.05, "tall mass center " + mode + " did not rise 32 tiles from the planned exit");
+    assertApprox(bottom.riseTiles, 32, 0.05, "tall mass bottom " + mode + " did not rise 32 tiles from the planned exit");
+  }
 }
 
 function testFirstLevelDeepReboundCanReachGoalHeight() {
@@ -1099,11 +1126,13 @@ function testFirstLevelDeepReboundCanReachGoalHeight() {
   const deepMassCol = 55;
   const massBottomRow = 30;
   const bottomY = (massBottomRow + 1) * g.CONFIG.TILE_SIZE;
-  setPlayer(g, cellX(g, deepMassCol), bottomY - g.CONFIG.PLAYER_H, "permeating");
-  const target = g.shouldRebound(g.playerRect()).targetRiseTiles;
+  for (const mode of ["release", "ctrl+shift"]) {
+    setPlayer(g, cellX(g, deepMassCol), bottomY - g.CONFIG.PLAYER_H, "permeating");
+    const target = g.shouldRebound(g.playerRect()).targetRiseTiles;
 
-  const measured = measureCurrentReboundPeakFromExit(g, 480);
-  assertApprox(measured.riseTiles, target, 0.05, "first level deep rebound did not follow its exit-relative target height");
+    const measured = measureCurrentReboundPeakFromExit(g, 480, mode);
+    assertApprox(measured.riseTiles, target, 0.05, "first level deep " + mode + " rebound did not follow its exit-relative target height");
+  }
 }
 
 function testPermeationBottomBrakeResistsDeepSinking() {
@@ -1223,7 +1252,9 @@ function testVeryHighFallCanPermeateThroughLargeMass() {
 function testPlayerLimitMeasurements() {
   const g = makeGame();
   const centerRebounds = [];
+  const centerAssistRebounds = [];
   const bottomRebounds = [];
+  const bottomAssistRebounds = [];
   const minimumFalls = [];
   const chainPeaks = [];
   const targetCenterRebounds = [1, 2, 4, 8, 16];
@@ -1236,15 +1267,19 @@ function testPlayerLimitMeasurements() {
   const terminalRows = findMaxTerminalVelocityPassThroughRows(g);
 
   for (let rows = 1; rows <= 5; rows++) {
-    centerRebounds.push(measureReboundPeak(g, rows, "center"));
-    bottomRebounds.push(measureReboundPeak(g, rows, "bottom"));
+    centerRebounds.push(measureReboundPeak(g, rows, "center", "release"));
+    centerAssistRebounds.push(measureReboundPeak(g, rows, "center", "ctrl+shift"));
+    bottomRebounds.push(measureReboundPeak(g, rows, "bottom", "release"));
+    bottomAssistRebounds.push(measureReboundPeak(g, rows, "bottom", "ctrl+shift"));
     minimumFalls.push(findMinimumFallTiles(g, rows));
     chainPeaks.push(oneTileGapChainImpossible(g, rows) ? null : measureChainPeak(g, rows));
   }
 
   for (let i = 0; i < 5; i++) {
-    assertApprox(centerRebounds[i], targetCenterRebounds[i], heightTolerance, "center rebound target missed for " + (i + 1) + " tile mass");
-    assertApprox(bottomRebounds[i], targetBottomRebounds[i], heightTolerance, "bottom rebound target missed for " + (i + 1) + " tile mass");
+    assertApprox(centerRebounds[i], targetCenterRebounds[i], heightTolerance, "release center rebound target missed for " + (i + 1) + " tile mass");
+    assertApprox(centerAssistRebounds[i], targetCenterRebounds[i], heightTolerance, "ctrl+shift center rebound target missed for " + (i + 1) + " tile mass");
+    assertApprox(bottomRebounds[i], targetBottomRebounds[i], heightTolerance, "release bottom rebound target missed for " + (i + 1) + " tile mass");
+    assertApprox(bottomAssistRebounds[i], targetBottomRebounds[i], heightTolerance, "ctrl+shift bottom rebound target missed for " + (i + 1) + " tile mass");
     assertApprox(minimumFalls[i], targetMinimumFalls[i], heightTolerance, "minimum fall-through target missed for " + (i + 1) + " tile mass");
   }
   assertApprox(normalJump, 2, heightTolerance, "normal jump target missed");
@@ -1255,13 +1290,15 @@ function testPlayerLimitMeasurements() {
   console.log("  normal jump peak: " + formatTiles(normalJump) + " tiles");
   console.log("  free fall to max speed: " + formatTiles(terminalFall) + " tiles");
   console.log("  max-speed pass-through: " + terminalRows + " tile rows");
-  console.log("  rows | center rebound | bottom rebound | min fall through | chain peak");
+  console.log("  rows | center rebound | center ctrl | bottom rebound | bottom ctrl | min fall through | chain peak");
   for (let i = 0; i < 5; i++) {
     console.log(
       "  " + (i + 1) +
       "    | " + formatTiles(centerRebounds[i]) +
-      "           | " + formatTiles(bottomRebounds[i]) +
-      "          | " + formatTiles(minimumFalls[i]) +
+      "           | " + formatTiles(centerAssistRebounds[i]) +
+      "        | " + formatTiles(bottomRebounds[i]) +
+      "          | " + formatTiles(bottomAssistRebounds[i]) +
+      "       | " + formatTiles(minimumFalls[i]) +
       "             | " + (chainPeaks[i] === null ? "impossible (32px gap < 40px player)" : formatTiles(chainPeaks[i]))
     );
   }
@@ -1495,12 +1532,13 @@ function testDynamicSolidCanTriggerRebound() {
     }, { char: "A", c: 12, r: 30, cols: 4, rows: 3 });
 
     const e = g.entities[0];
-    setPlayer(g, e.x + 32, e.y + 34, "permeating");
-    release(g, "ShiftLeft");
-    step(g);
+    for (const mode of ["release", "ctrl+shift"]) {
+      setPlayer(g, e.x + 32, e.y + 34, "permeating");
+      activateRebound(g, mode);
 
-    assert(g.overlappingSolidEntities(g.playerRect()).length > 0, "player was not embedded in dynamic solid");
-    assert(g.player.state === "rebounding", "dynamic solid release did not start rebound");
+      assert(g.overlappingSolidEntities(g.playerRect()).length > 0, "player was not embedded in dynamic solid for " + mode);
+      assert(g.player.state === "rebounding", "dynamic solid " + mode + " did not start rebound");
+    }
   } finally {
     g.LEVELS.length = originalLength;
     g.loadLevel(0);
