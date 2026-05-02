@@ -363,12 +363,12 @@ function fixtureRows(width = 50) {
 
 function pushDynamicFixture(g, entity, checkpoints = []) {
   const index = g.LEVELS.length;
-  g.LEVELS.push({
+  g.LEVELS.push(g.defineLevel({
     name: "Dynamic Fixture",
     map: fixtureRows(),
     entities: [entity],
     checkpoints
-  });
+  }));
   g.loadLevel(index);
   return index;
 }
@@ -379,17 +379,12 @@ function testMovingEntityStepsDeterministically() {
 
   try {
     pushDynamicFixture(g, {
-      type: "mover",
-      c: 8,
-      r: 30,
-      w: 4,
-      h: 1,
-      path: "horizontal",
-      ampX: 64,
-      ampY: 0,
-      speed: 1.5,
-      phase: 0,
-      role: "platform"
+      kind: "mover",
+      name: "deterministic shuttle",
+      at: { c: 8, r: 30 },
+      size: { cols: 4, rows: 1 },
+      role: "platform",
+      motion: { kind: "horizontal", amplitude: { x: 64, y: 0 }, speed: 1.5, phase: 0 }
     });
 
     step(g, 30);
@@ -409,17 +404,12 @@ function testSolidPlayerRidesMovingPlatform() {
 
   try {
     pushDynamicFixture(g, {
-      type: "mover",
-      c: 8,
-      r: 30,
-      w: 5,
-      h: 1,
-      path: "horizontal",
-      ampX: 80,
-      ampY: 0,
-      speed: 1.2,
-      phase: 0,
-      role: "platform"
+      kind: "mover",
+      name: "rideable shuttle",
+      at: { c: 8, r: 30 },
+      size: { cols: 5, rows: 1 },
+      role: "platform",
+      motion: { kind: "horizontal", amplitude: { x: 80, y: 0 }, speed: 1.2, phase: 0 }
     });
 
     const e = g.entities[0];
@@ -441,17 +431,12 @@ function testDynamicSolidCanTriggerRebound() {
 
   try {
     pushDynamicFixture(g, {
-      type: "mover",
-      c: 12,
-      r: 30,
-      w: 4,
-      h: 3,
-      path: "horizontal",
-      ampX: 0,
-      ampY: 0,
-      speed: 0,
-      phase: 0,
-      role: "rebound"
+      kind: "mover",
+      name: "static rebound mass",
+      at: { c: 12, r: 30 },
+      size: { cols: 4, rows: 3 },
+      role: "rebound",
+      motion: { kind: "horizontal", amplitude: { x: 0, y: 0 }, speed: 0, phase: 0 }
     });
 
     const e = g.entities[0];
@@ -473,15 +458,11 @@ function testAsteroidImpactRecoversToCheckpoint() {
 
   try {
     pushDynamicFixture(g, {
-      type: "asteroid",
-      c: 12,
-      r: 30,
-      w: 3,
-      h: 3,
-      speed: 0,
-      period: 10,
-      phase: 1,
-      warning: 0
+      kind: "asteroid",
+      name: "checkpoint test asteroid",
+      at: { c: 12, r: 30 },
+      size: { cols: 3, rows: 3 },
+      timing: { speed: 0, period: 10, phase: 1, warning: 0 }
     });
 
     const e = g.entities[0];

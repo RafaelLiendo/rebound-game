@@ -39,8 +39,18 @@ There is no build step. `index.html` can be opened directly in a browser.
   - `.` = empty space
   - `S` = player spawn
   - `G` = goal
-- Multiple levels are defined in `LEVELS`. Use `loadLevel(index)` rather than
-  mutating map globals directly.
+- Multiple levels are defined in `LEVELS` with `defineLevel({ ... })`. Keep
+  authored levels readable: use literal ASCII `map` rows as the terrain source
+  of truth, and put dynamic objects in nearby `entities` / `checkpoints`
+  arrays.
+- Level entities should use named object fields rather than positional helper
+  arguments:
+  - movers: `kind`, `name`, `at`, `size`, `role`, and `motion`
+  - asteroids: `kind`, `name`, `at`, `size`, and `timing`
+  - checkpoints: `name` and `at`
+- `defineLevel()` normalizes authored entity objects into the runtime shape
+  used by the simulation. Use `loadLevel(index)` rather than mutating map
+  globals directly.
 - Different levels may have different row and column counts. Within a single
   level, every map row must have the same number of columns; `parseLevel()`
   throws an error for uneven row widths.
@@ -74,6 +84,7 @@ Add smoke coverage when changing:
 
 - player state transitions
 - collision or tile parsing
+- dynamic matter, moving platforms, asteroids, or checkpoints
 - rebound/stuck behavior
 - level loading or goal completion
 - camera tracking or active level dimensions
@@ -86,4 +97,6 @@ Add smoke coverage when changing:
 - Avoid broad refactors while tuning mechanics.
 - Keep HUD text short enough to fit the existing overlay.
 - When adding levels, preserve consistent row widths within each map. Wider
-  maps are encouraged when the route benefits from horizontal traversal.
+  maps are encouraged when the route benefits from horizontal traversal. Keep
+  entity lists ordered roughly in route order so the level design is easy to
+  scan from code.
