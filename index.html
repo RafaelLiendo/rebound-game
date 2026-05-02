@@ -62,24 +62,31 @@
       right: 18px;
       top: 14px;
       display: grid;
-      grid-template-columns: minmax(280px, 430px) minmax(120px, 1fr) minmax(470px, 0.95fr);
+      grid-template-columns: minmax(280px, 420px) 1fr minmax(420px, 500px);
       grid-template-areas:
-        "meter . controls"
-        "status . controls";
-      column-gap: 18px;
-      row-gap: 6px;
-      align-items: center;
-      padding: 7px 10px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: linear-gradient(90deg, rgba(14, 19, 25, 0.84), rgba(14, 19, 25, 0.66));
-      backdrop-filter: blur(10px);
-      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
+        "readout . controls";
+      gap: 18px;
+      align-items: start;
       pointer-events: none;
     }
 
+    .readout,
+    .controls {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(14, 19, 25, 0.78);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.22);
+    }
+
+    .readout {
+      grid-area: readout;
+      display: grid;
+      gap: 6px;
+      padding: 8px 10px;
+    }
+
     .status {
-      grid-area: status;
       display: flex;
       gap: 10px;
       align-items: center;
@@ -111,9 +118,8 @@
     }
 
     .meter {
-      grid-area: meter;
       width: min(100%, 220px);
-      height: 14px;
+      height: 12px;
       overflow: hidden;
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -138,6 +144,7 @@
       grid-auto-flow: column;
       gap: 3px 12px;
       width: 100%;
+      padding: 8px 10px;
       color: var(--muted);
       font-size: 11px;
       font-weight: 700;
@@ -204,15 +211,10 @@
 
     @media (max-width: 980px) {
       .hud {
-        grid-template-columns: minmax(240px, 430px) minmax(80px, 1fr);
+        grid-template-columns: minmax(240px, 420px) 1fr;
         grid-template-areas:
-          "meter ."
-          "status ."
+          "readout ."
           "controls controls";
-      }
-
-      .controls {
-        grid-area: controls;
       }
     }
 
@@ -232,11 +234,9 @@
         top: 10px;
         grid-template-columns: minmax(0, 1fr);
         grid-template-areas:
-          "meter"
-          "status"
+          "readout"
           "controls";
         gap: 8px;
-        padding: 8px;
       }
 
       .meter {
@@ -248,10 +248,16 @@
         font-size: 12px;
       }
 
+      .controls {
+        grid-template-rows: none;
+        grid-template-columns: 1fr;
+        grid-auto-flow: row;
+      }
+
       .control,
-      .control:nth-child(-n + 3),
-      .control:nth-child(n + 4) {
-        grid-column: span 6;
+      .control:nth-child(-n + 2),
+      .control:nth-child(n + 3) {
+        grid-column: auto;
       }
     }
   </style>
@@ -260,12 +266,14 @@
   <main class="shell">
     <canvas id="game" width="960" height="540" aria-label="Permeation buoyancy game demo"></canvas>
     <section class="hud" aria-label="Game status">
-      <div class="status">
-        <span id="stateLabel">solid</span>
-        <span id="messageLabel">find the pressure in the ground</span>
-      </div>
-      <div class="meter" aria-label="pressure">
-        <span id="pressureFill"></span>
+      <div class="readout">
+        <div class="meter" aria-label="pressure">
+          <span id="pressureFill"></span>
+        </div>
+        <div class="status">
+          <span id="stateLabel">solid</span>
+          <span id="messageLabel">find the pressure in the ground</span>
+        </div>
       </div>
       <div class="controls">
         <span class="control">
