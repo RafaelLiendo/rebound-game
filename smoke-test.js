@@ -353,24 +353,151 @@ function testBlockedUpwardEscapeBecomesStuck() {
   assert(g.overlappingSolidTiles(g.playerRect()).length === 0, "stuck recovery left player inside terrain");
 }
 
-function fixtureRows(width = 50) {
+function paintRect(rows, c, r, cols, rowCount, ch) {
+  for (let rr = r; rr < r + rowCount; rr++) {
+    for (let cc = c; cc < c + cols; cc++) rows[rr][cc] = ch;
+  }
+}
+
+function fixtureRows(width = 50, markers = [], checkpointCells = []) {
   const rows = Array.from({ length: 45 }, () => Array(width).fill("."));
   rows[43][1] = "S";
   rows[10][width - 3] = "G";
+  for (const marker of markers) {
+    paintRect(rows, marker.c, marker.r, marker.cols, marker.rows, marker.char);
+  }
+  for (const checkpoint of checkpointCells) {
+    rows[checkpoint.r][checkpoint.c] = String(checkpoint.order);
+  }
   for (let c = 0; c < width; c++) rows[44][c] = "#";
   return rows.map((row) => row.join(""));
 }
 
-function pushDynamicFixture(g, entity, checkpoints = []) {
+function pushDynamicFixture(g, entity, marker, checkpointCells = []) {
+  const markers = Array.isArray(marker) ? marker : [marker];
   const index = g.LEVELS.length;
   g.LEVELS.push(g.defineLevel({
     name: "Dynamic Fixture",
-    map: fixtureRows(),
-    entities: [entity],
-    checkpoints
+    map: fixtureRows(50, markers, checkpointCells),
+    entities: [entity]
   }));
   g.loadLevel(index);
   return index;
+}
+
+function assertDefineLevelFails(g, def, pattern, msg) {
+  let failed = false;
+  try {
+    g.defineLevel(def);
+  } catch (err) {
+    failed = pattern.test(err.message);
+  }
+  assert(failed, msg);
+}
+
+function testEntityCharMarkersNormalizeGeometry() {
+  const g = makeGame();
+  const level = g.defineLevel({
+    name: "Entity Marker Geometry",
+    map: fixtureRows(50, [
+      { char: "M", c: 7, r: 22, cols: 3, rows: 2 }
+    ]),
+    entities: [
+      { kind: "mover", name: "marked mass", char: "M", role: "rebound" }
+    ]
+  });
+
+  assert(level.entities.length === 1, "entity marker did not create one normalized entity");
+  assert(level.entities[0].c === 7 && level.entities[0].r === 22, "entity marker did not preserve position");
+  assert(level.entities[0].w === 3 && level.entities[0].h === 2, "entity marker did not preserve size");
+}
+
+function testRepeatedEntityCharCreatesMultipleClusters() {
+  const g = makeGame();
+  const level = g.defineLevel({
+    name: "Repeated Entity Marker",
+    map: fixtureRows(50, [
+      { char: "A", c: 8, r: 28, cols: 2, rows: 1 },
+      { char: "A", c: 18, r: 20, cols: 3, rows: 2 }
+    ]),
+    entities: [
+      { kind: "mover", name: "shared shuttle", char: "A", role: "platform" }
+    ]
+  });
+
+  assert(level.entities.length === 2, "same char did not create multiple entity instances");
+  assert(level.entities[0].name === "shared shuttle 1", "first repeated entity name was not stable");
+  assert(level.entities[1].name === "shared shuttle 2", "second repeated entity name was not stable");
+  assert(level.entities[0].c === 18 && level.entities[0].r === 20, "repeated entities were not sorted top-to-bottom");
+  assert(level.entities[1].c === 8 && level.entities[1].r === 28, "repeated entity geometry was not preserved");
+}
+
+function testIrregularEntityMarkerIsRejected() {
+  const g = makeGame();
+  const rows = fixtureRows().map((row) => row.split(""));
+  rows[22][10] = "A";
+  rows[23][10] = "A";
+  rows[23][11] = "A";
+
+  assertDefineLevelFails(g, {
+    name: "Irregular Marker",
+    map: rows.map((row) => row.join("")),
+    entities: [
+      { kind: "mover", name: "bad marker", char: "A" }
+    ]
+  }, /rectangles/, "irregular marker cluster was not rejected");
+}
+
+function testMissingEntityDefinitionIsRejected() {
+  const g = makeGame();
+  assertDefineLevelFails(g, {
+    name: "Missing Marker Definition",
+    map: fixtureRows(50, [
+      { char: "A", c: 8, r: 28, cols: 2, rows: 1 }
+    ])
+  }, /no matching entity/, "map letter without entity definition was not rejected");
+}
+
+function testCheckpointDigitsParseWithoutCheckpointProperty() {
+  const g = makeGame();
+  const level = g.defineLevel({
+    name: "Digit Checkpoints",
+    map: fixtureRows(50, [], [
+      { order: 2, c: 16, r: 31 },
+      { order: 1, c: 10, r: 35 }
+    ])
+  });
+
+  assert(level.checkpoints.length === 2, "checkpoint digits were not parsed");
+  assert(level.checkpoints[0].order === 1 && level.checkpoints[1].order === 2, "checkpoint digits were not sorted by order");
+  assert(level.checkpoints[0].c === 10 && level.checkpoints[1].c === 16, "checkpoint digit positions were not preserved");
+}
+
+function testLargestCheckpointReachedStaysActive() {
+  const g = makeGame();
+  const originalLength = g.LEVELS.length;
+  const index = g.LEVELS.length;
+  g.LEVELS.push(g.defineLevel({
+    name: "Checkpoint Ordering",
+    map: fixtureRows(50, [], [
+      { order: 1, c: 8, r: 35 },
+      { order: 2, c: 12, r: 35 }
+    ])
+  }));
+
+  try {
+    g.loadLevel(index);
+    setPlayer(g, cellX(g, 12), standY(g, 36), "solid");
+    step(g);
+    assert(g.activeCheckpoint.order === 2, "checkpoint 2 was not activated");
+
+    setPlayer(g, cellX(g, 8), standY(g, 36), "solid");
+    step(g);
+    assert(g.activeCheckpoint.order === 2, "touching checkpoint 1 downgraded the active checkpoint");
+  } finally {
+    g.LEVELS.length = originalLength;
+    g.loadLevel(0);
+  }
 }
 
 function testMovingEntityStepsDeterministically() {
@@ -381,11 +508,10 @@ function testMovingEntityStepsDeterministically() {
     pushDynamicFixture(g, {
       kind: "mover",
       name: "deterministic shuttle",
-      at: { c: 8, r: 30 },
-      size: { cols: 4, rows: 1 },
+      char: "A",
       role: "platform",
       motion: { kind: "horizontal", amplitude: { x: 64, y: 0 }, speed: 1.5, phase: 0 }
-    });
+    }, { char: "A", c: 8, r: 30, cols: 4, rows: 1 });
 
     step(g, 30);
     const e = g.entities[0];
@@ -406,11 +532,10 @@ function testSolidPlayerRidesMovingPlatform() {
     pushDynamicFixture(g, {
       kind: "mover",
       name: "rideable shuttle",
-      at: { c: 8, r: 30 },
-      size: { cols: 5, rows: 1 },
+      char: "A",
       role: "platform",
       motion: { kind: "horizontal", amplitude: { x: 80, y: 0 }, speed: 1.2, phase: 0 }
-    });
+    }, { char: "A", c: 8, r: 30, cols: 5, rows: 1 });
 
     const e = g.entities[0];
     setPlayer(g, e.x + 24, e.y - g.CONFIG.PLAYER_H, "solid");
@@ -433,11 +558,10 @@ function testDynamicSolidCanTriggerRebound() {
     pushDynamicFixture(g, {
       kind: "mover",
       name: "static rebound mass",
-      at: { c: 12, r: 30 },
-      size: { cols: 4, rows: 3 },
+      char: "A",
       role: "rebound",
       motion: { kind: "horizontal", amplitude: { x: 0, y: 0 }, speed: 0, phase: 0 }
-    });
+    }, { char: "A", c: 12, r: 30, cols: 4, rows: 3 });
 
     const e = g.entities[0];
     setPlayer(g, e.x + 32, e.y + 34, "permeating");
@@ -460,10 +584,9 @@ function testAsteroidImpactRecoversToCheckpoint() {
     pushDynamicFixture(g, {
       kind: "asteroid",
       name: "checkpoint test asteroid",
-      at: { c: 12, r: 30 },
-      size: { cols: 3, rows: 3 },
+      char: "A",
       timing: { speed: 0, period: 10, phase: 1, warning: 0 }
-    });
+    }, { char: "A", c: 12, r: 30, cols: 3, rows: 3 });
 
     const e = g.entities[0];
     setPlayer(g, e.x + 16, e.y + 16, "solid");
@@ -489,6 +612,12 @@ const tests = [
   ["manual queue consumes on surface", testManualQueueConsumesOnSurface],
   ["upper-body-only release waits until clear", testUpperBodyOnlyReleaseDoesNotRebound],
   ["blocked upward escape recovers from stuck", testBlockedUpwardEscapeBecomesStuck],
+  ["entity chars normalize geometry", testEntityCharMarkersNormalizeGeometry],
+  ["repeated entity chars create clusters", testRepeatedEntityCharCreatesMultipleClusters],
+  ["irregular entity markers are rejected", testIrregularEntityMarkerIsRejected],
+  ["missing entity definitions are rejected", testMissingEntityDefinitionIsRejected],
+  ["checkpoint digits parse without definitions", testCheckpointDigitsParseWithoutCheckpointProperty],
+  ["largest checkpoint reached stays active", testLargestCheckpointReachedStaysActive],
   ["moving entity steps deterministically", testMovingEntityStepsDeterministically],
   ["solid player rides moving platform", testSolidPlayerRidesMovingPlatform],
   ["dynamic solid can trigger rebound", testDynamicSolidCanTriggerRebound],
