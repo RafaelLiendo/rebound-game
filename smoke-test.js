@@ -99,8 +99,8 @@ function findMarker(level, marker) {
 function testLoadLevelRecalculatesMap() {
   const g = makeGame();
   const ts = g.CONFIG.TILE_SIZE;
-  const expectedSpawn = findMarker(g.LEVELS[1], "S");
-  const expectedGoal = findMarker(g.LEVELS[1], "G");
+  const expectedSpawn = findMarker(g.LEVELS[1], "0");
+  const expectedGoal = findMarker(g.LEVELS[1], "@");
 
   assert(g.LEVELS.length >= 5, "game does not expose the authored level set");
   assert(g.currentLevelIndex === 0, "game did not start on level 0");
@@ -122,13 +122,13 @@ function testAuthoredLevelsHaveValidMarkersAndStarts() {
   g.LEVELS.forEach((level, index) => {
     const width = level.map[0].length;
     const joined = level.map.join("");
-    const spawnCount = (joined.match(/S/g) || []).length;
-    const goalCount = (joined.match(/G/g) || []).length;
+    const spawnCount = (joined.match(/0/g) || []).length;
+    const goalCount = (joined.match(/@/g) || []).length;
 
     assert(width > 30, "level " + (index + 1) + " does not take advantage of horizontal camera tracking");
     assert(level.map.length === 45, "level " + (index + 1) + " is not 45 rows tall");
     assert(level.map.every((row) => row.length === width), "level " + (index + 1) + " has uneven rows");
-    assert(spawnCount === 1, "level " + (index + 1) + " must have exactly one spawn");
+    assert(spawnCount === 1, "level " + (index + 1) + " must have exactly one spawn checkpoint 0");
     assert(goalCount === 1, "level " + (index + 1) + " must have exactly one goal");
 
     g.loadLevel(index);
@@ -145,8 +145,8 @@ function testCameraTracksHorizontallyInWideLevel() {
   const g = makeGame();
   const originalLength = g.LEVELS.length;
   const rows = Array.from({ length: 45 }, () => Array(60).fill("."));
-  rows[43][1] = "S";
-  rows[40][58] = "G";
+  rows[43][1] = "0";
+  rows[40][58] = "@";
   for (let c = 0; c < 60; c++) rows[44][c] = "#";
 
   g.LEVELS.push({
@@ -179,9 +179,9 @@ function testLoadLevelRejectsUnevenRows() {
   g.LEVELS.push({
     name: "Broken Rows",
     map: [
-      "S..",
+      "0..",
       "##",
-      "..G"
+      "..@"
     ]
   });
 
@@ -198,19 +198,38 @@ function testLoadLevelRejectsUnevenRows() {
   assert(failed, "loadLevel did not reject uneven row widths");
 }
 
-function testResetRestartsCurrentLevel() {
+function testResetRespawnsAtActiveCheckpoint() {
   const g = makeGame();
-  g.loadLevel(1);
-  g.player.x = 500;
-  g.player.y = 200;
+  const originalLength = g.LEVELS.length;
+  const index = g.LEVELS.length;
+  g.LEVELS.push(g.defineLevel({
+    name: "Reset Checkpoint Fixture",
+    map: fixtureRows(50, [], [
+      { order: 1, c: 8, r: 35 },
+      { order: 2, c: 12, r: 35 }
+    ])
+  }));
 
-  press(g, "KeyR");
-  step(g);
+  try {
+    g.loadLevel(index);
+    setPlayer(g, cellX(g, 12), standY(g, 36), "solid");
+    step(g);
+    assert(g.activeCheckpoint.order === 2, "checkpoint 2 was not activated before reset");
 
-  assert(g.currentLevelIndex === 1, "reset changed the current level");
-  assert(g.player.won === false, "reset left the player in a won state");
-  assertNear(g.player.x, g.spawnCell.x + (g.CONFIG.TILE_SIZE - g.CONFIG.PLAYER_W) / 2, "reset did not restore spawn x");
-  assertNear(g.player.y, (g.spawnCell.r + 1) * g.CONFIG.TILE_SIZE - g.CONFIG.PLAYER_H, "reset did not restore spawn y");
+    g.player.x = 500;
+    g.player.y = 200;
+    press(g, "KeyR");
+    step(g);
+
+    assert(g.currentLevelIndex === index, "reset changed the current level");
+    assert(g.activeCheckpoint.order === 2, "reset cleared checkpoint progress");
+    assert(g.player.won === false, "reset left the player in a won state");
+    assertNear(g.player.x, cellX(g, 12), "reset did not restore active checkpoint x");
+    assertNear(g.player.y, standY(g, 36), "reset did not restore active checkpoint y");
+  } finally {
+    g.LEVELS.length = originalLength;
+    g.loadLevel(0);
+  }
 }
 
 function testWinningAdvancesToNextLevel() {
@@ -222,6 +241,7 @@ function testWinningAdvancesToNextLevel() {
 
   assert(g.currentLevelIndex === 1, "Space on win screen did not advance to the next level");
   assert(g.player.won === false, "advanced level started in a won state");
+  assert(g.activeCheckpoint.order === 0, "advanced level did not reset active checkpoint to 0");
 }
 
 function testFinalLevelDoesNotAdvancePastEnd() {
@@ -361,8 +381,8 @@ function paintRect(rows, c, r, cols, rowCount, ch) {
 
 function fixtureRows(width = 50, markers = [], checkpointCells = []) {
   const rows = Array.from({ length: 45 }, () => Array(width).fill("."));
-  rows[43][1] = "S";
-  rows[10][width - 3] = "G";
+  rows[43][1] = "0";
+  rows[10][width - 3] = "@";
   for (const marker of markers) {
     paintRect(rows, marker.c, marker.r, marker.cols, marker.rows, marker.char);
   }
@@ -458,6 +478,23 @@ function testMissingEntityDefinitionIsRejected() {
   }, /no matching entity/, "map letter without entity definition was not rejected");
 }
 
+function testLegacySpawnGoalLettersCanBeEntities() {
+  const g = makeGame();
+  const level = g.defineLevel({
+    name: "Legacy Letter Entities",
+    map: fixtureRows(50, [
+      { char: "S", c: 8, r: 28, cols: 2, rows: 1 },
+      { char: "G", c: 14, r: 24, cols: 2, rows: 1 }
+    ]),
+    entities: [
+      { kind: "mover", name: "s-letter mover", char: "S" },
+      { kind: "mover", name: "g-letter mover", char: "G" }
+    ]
+  });
+
+  assert(level.entities.length === 2, "S and G were not accepted as entity letters");
+}
+
 function testCheckpointDigitsParseWithoutCheckpointProperty() {
   const g = makeGame();
   const level = g.defineLevel({
@@ -468,9 +505,9 @@ function testCheckpointDigitsParseWithoutCheckpointProperty() {
     ])
   });
 
-  assert(level.checkpoints.length === 2, "checkpoint digits were not parsed");
-  assert(level.checkpoints[0].order === 1 && level.checkpoints[1].order === 2, "checkpoint digits were not sorted by order");
-  assert(level.checkpoints[0].c === 10 && level.checkpoints[1].c === 16, "checkpoint digit positions were not preserved");
+  assert(level.checkpoints.length === 3, "checkpoint digits were not parsed");
+  assert(level.checkpoints[0].order === 0 && level.checkpoints[1].order === 1 && level.checkpoints[2].order === 2, "checkpoint digits were not sorted by order");
+  assert(level.checkpoints[0].c === 1 && level.checkpoints[1].c === 10 && level.checkpoints[2].c === 16, "checkpoint digit positions were not preserved");
 }
 
 function testLargestCheckpointReachedStaysActive() {
@@ -586,14 +623,20 @@ function testAsteroidImpactRecoversToCheckpoint() {
       name: "checkpoint test asteroid",
       char: "A",
       timing: { speed: 0, period: 10, phase: 1, warning: 0 }
-    }, { char: "A", c: 12, r: 30, cols: 3, rows: 3 });
+    }, { char: "A", c: 12, r: 30, cols: 3, rows: 3 }, [
+      { order: 1, c: 8, r: 35 }
+    ]);
+
+    setPlayer(g, cellX(g, 8), standY(g, 36), "solid");
+    step(g);
+    assert(g.activeCheckpoint.order === 1, "checkpoint 1 was not activated before asteroid impact");
 
     const e = g.entities[0];
     setPlayer(g, e.x + 16, e.y + 16, "solid");
     step(g);
 
-    assertNear(g.player.x, g.spawnCell.x + (g.CONFIG.TILE_SIZE - g.CONFIG.PLAYER_W) / 2, "asteroid did not recover player to checkpoint x");
-    assertNear(g.player.y, (g.spawnCell.r + 1) * g.CONFIG.TILE_SIZE - g.CONFIG.PLAYER_H, "asteroid did not recover player to checkpoint y");
+    assertNear(g.player.x, cellX(g, 8), "asteroid did not recover player to active checkpoint x");
+    assertNear(g.player.y, standY(g, 36), "asteroid did not recover player to active checkpoint y");
   } finally {
     g.LEVELS.length = originalLength;
     g.loadLevel(0);
@@ -605,7 +648,7 @@ const tests = [
   ["authored levels have valid starts", testAuthoredLevelsHaveValidMarkersAndStarts],
   ["camera tracks horizontally in wide levels", testCameraTracksHorizontallyInWideLevel],
   ["load level rejects uneven rows", testLoadLevelRejectsUnevenRows],
-  ["reset restarts current level", testResetRestartsCurrentLevel],
+  ["reset respawns at active checkpoint", testResetRespawnsAtActiveCheckpoint],
   ["winning advances to next level", testWinningAdvancesToNextLevel],
   ["final level stops at end", testFinalLevelDoesNotAdvancePastEnd],
   ["auto assist climbs ten 2-gap tiles", testAutoAssistClimbsTenTileStack],
@@ -616,6 +659,7 @@ const tests = [
   ["repeated entity chars create clusters", testRepeatedEntityCharCreatesMultipleClusters],
   ["irregular entity markers are rejected", testIrregularEntityMarkerIsRejected],
   ["missing entity definitions are rejected", testMissingEntityDefinitionIsRejected],
+  ["legacy spawn goal letters can be entities", testLegacySpawnGoalLettersCanBeEntities],
   ["checkpoint digits parse without definitions", testCheckpointDigitsParseWithoutCheckpointProperty],
   ["largest checkpoint reached stays active", testLargestCheckpointReachedStaysActive],
   ["moving entity steps deterministically", testMovingEntityStepsDeterministically],

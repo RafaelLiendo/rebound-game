@@ -46,7 +46,7 @@ state flow, controls, and behavior validation.
 - Jump: Space.
 - Permeate: Shift.
 - Auto Rebound/Permeate assist: hold Left Ctrl while holding Shift.
-- Reset: R.
+- Reset to latest checkpoint: R.
 
 ## State Machine
 
@@ -67,7 +67,7 @@ state flow, controls, and behavior validation.
 ### Transitions
 
 - **Start or reset -> Solid**: The player begins in a recoverable, playable
-  position.
+  position at the current level's largest reached checkpoint.
 - **Solid -> Permeating**: The player presses Permeate.
 - **Permeating -> Solid**: The player releases Permeate while clear of solid
   matter.
@@ -87,7 +87,7 @@ state flow, controls, and behavior validation.
   trapped in solid matter.
 - **Stuck -> Solid**: Recovery returns the player to a playable position.
 - **Any active state -> Won**: The player reaches the goal.
-- **Won -> Solid**: Reset starts the level again.
+- **Won -> Solid**: Reset respawns at the largest reached checkpoint.
 
 ## Puzzle Beats
 
@@ -132,8 +132,9 @@ implementation details and fixed tuning values.
 
 ### Playable Mechanics Checks
 
-- **Boot and reset**: The game should start and reset into a playable Solid
-  state with no immediate terrain overlap.
+- **Boot and reset**: The game should start at checkpoint zero and reset into a
+  playable Solid state at the largest reached checkpoint with no immediate
+  terrain overlap.
 - **Basic movement**: Left/right movement, jump, short-hop behavior, landing,
   and ledge forgiveness should feel consistent and controllable.
 - **Thin-surface permeation**: Holding Permeate on a thin surface should carry
@@ -158,7 +159,7 @@ implementation details and fixed tuning values.
 - **Assist cancellation**: Releasing either Permeate or assist should stop the
   auto chain and return to the normal state flow.
 - **Goal completion**: Touching the goal should enter Won, show completion, and
-  allow reset.
+  allow reset to the largest reached checkpoint.
 
 ## Presentation Cues
 

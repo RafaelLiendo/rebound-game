@@ -37,10 +37,10 @@ There is no build step. `index.html` can be opened directly in a browser.
 - The tile map uses 32 px cells and string rows:
   - `#` = solid terrain
   - `.` = empty space
-  - `S` = player spawn
-  - `G` = goal
+  - `0` = player spawn and checkpoint zero
+  - `@` = goal
   - single ASCII letters = dynamic entity markers
-  - digits `1` to `9` = checkpoints
+  - digits `0` to `9` = checkpoints
 - Multiple levels are defined in `LEVELS` with `defineLevel({ ... })`. Keep
   authored levels readable: use literal ASCII `map` rows as the terrain source
   of truth. Put dynamic entity geometry directly in the map and keep entity
@@ -49,13 +49,14 @@ There is no build step. `index.html` can be opened directly in a browser.
   arguments:
   - movers: `kind`, `char`, `name`, `role`, and `motion`
   - asteroids: `kind`, `char`, `name`, and `timing`
-- The entity `char` is case-sensitive and must be a single ASCII letter other
-  than `S` or `G`. Each connected group of matching letters becomes one
-  rectangular runtime entity; separate groups using the same letter create
-  multiple entities with shared behavior.
+- The entity `char` is case-sensitive and must be a single ASCII letter. Each
+  connected group of matching letters becomes one rectangular runtime entity;
+  separate groups using the same letter create multiple entities with shared
+  behavior.
 - Do not use entity `at` / `size` fields or a separate `checkpoints` property.
-  Checkpoint digits in the map are parsed in numeric order, and recovery always
-  uses the largest checkpoint reached.
+  Checkpoint digits in the map are parsed in numeric order, including `0` as
+  the spawn checkpoint, and recovery always uses the largest checkpoint
+  reached.
 - `defineLevel()` normalizes authored map markers and entity objects into the
   runtime shape used by the simulation. Use `loadLevel(index)` rather than
   mutating map globals directly.
@@ -77,7 +78,8 @@ Maintain the feel described in `Plan.md`:
 - Upper-body-only release should phase clear without firing a rebound.
 - Blocked upward escape should enter `stuck` briefly and recover cleanly.
 - Manual and assisted chain rebound should remain responsive.
-- Reset with `R` should restart the current level.
+- Reset with `R` should respawn at the largest checkpoint reached in the
+  current level.
 - Completing a non-final level should allow advancing to the next level.
 
 ## Testing Expectations
