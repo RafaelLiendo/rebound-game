@@ -1398,7 +1398,6 @@
       reboundStrength: 0,
       reboundTargetRiseTiles: 0,
       reboundLaunchVelocity: 0,
-      reboundCarryVelocity: 0,
       reboundExitY: null,
       stuckTimer: 0,
       flashTimer: 0
@@ -1426,7 +1425,6 @@
       player.reboundStrength = 0;
       player.reboundTargetRiseTiles = 0;
       player.reboundLaunchVelocity = 0;
-      player.reboundCarryVelocity = 0;
       player.reboundExitY = null;
       player.stuckTimer = 0;
       player.flashTimer = 0;
@@ -1828,15 +1826,12 @@
       player.reboundStrength = 0;
       player.reboundTargetRiseTiles = 0;
       player.reboundLaunchVelocity = 0;
-      player.reboundCarryVelocity = 0;
       player.reboundExitY = null;
       shake = 16;
       spawnRipple(player.x + CONFIG.PLAYER_W / 2, player.y + CONFIG.PLAYER_H / 2, 0.8);
     }
 
     function beginRebound(result) {
-      var carriedVelocity = player.reboundCarryVelocity || 0;
-      player.reboundCarryVelocity = 0;
       player.state = "rebounding";
       player.vy = Math.min(player.vy, -CONFIG.REBOUND_SURFACE_SPEED);
       player.reboundSurfaced = false;
@@ -1848,10 +1843,7 @@
       player.embeddedDepth = result && result.depth ? result.depth : 0;
       player.reboundStrength = result && result.strength ? result.strength : 0.35;
       player.reboundTargetRiseTiles = result && result.targetRiseTiles ? result.targetRiseTiles : 0;
-      player.reboundLaunchVelocity = Math.max(
-        result && result.launchVelocity ? result.launchVelocity : 0,
-        carriedVelocity
-      );
+      player.reboundLaunchVelocity = result && result.launchVelocity ? result.launchVelocity : 0;
       player.reboundExitY = result && result.exitY !== undefined ? result.exitY : null;
       shake = 5 + player.reboundStrength * 12;
       spawnRipple(player.x + CONFIG.PLAYER_W / 2, player.y + CONFIG.PLAYER_H / 2, player.reboundStrength);
@@ -1862,7 +1854,6 @@
 
     function consumeReboundExit() {
       if (player.queuedPermeate) {
-        player.reboundCarryVelocity = Math.max(0, -player.vy);
         player.state = "permeating";
         player.permeateUntilClear = false;
         player.permeateStartFeetY = player.y + CONFIG.PLAYER_H;
@@ -1885,7 +1876,6 @@
       player.reboundStrength = 0;
       player.reboundTargetRiseTiles = 0;
       player.reboundLaunchVelocity = 0;
-      player.reboundCarryVelocity = 0;
       player.reboundExitY = null;
     }
 
@@ -1962,7 +1952,6 @@
       player.reboundStrength = 0;
       player.reboundTargetRiseTiles = 0;
       player.reboundLaunchVelocity = 0;
-      player.reboundCarryVelocity = 0;
       player.reboundExitY = null;
       probeGrounded();
     }
@@ -2125,7 +2114,6 @@
           } else {
             player.state = "solid";
             player.permeateStartFeetY = null;
-            player.reboundCarryVelocity = 0;
           }
         }
       }
@@ -2134,7 +2122,6 @@
         player.permeateUntilClear = false;
         player.state = "solid";
         player.permeateStartFeetY = null;
-        player.reboundCarryVelocity = 0;
       }
 
       var moveInput = (keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0);

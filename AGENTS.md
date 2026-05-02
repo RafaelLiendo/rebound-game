@@ -89,10 +89,10 @@ There is no build step. `index.html` can be opened directly in a browser.
   planned exit, then receives the launch velocity for the full target rise.
   Deep releases in tall masses should still reach the capped target height from
   that exit; do not subtract embedded depth from post-exit launch height.
-- Manual and assisted chain rebounds should preserve strong upward energy at
-  rebound boundaries. Avoid changes that collapse queued chain exits into small
-  per-tile bumps; keep the smoke coverage that records chain exit velocity and
-  exit-relative rebound peak height.
+- Manual and assisted rebounds should use the same target-based launch velocity
+  at the planned exit. Do not let Ctrl+Shift preserve the artificial surfacing
+  speed as extra rebound height; keep smoke coverage comparing release and
+  Ctrl+Shift rebound peaks, plus chain responsiveness.
 - Permeation pass-through is also target-based: short falls should be resisted
   by drag, center pull, and bottom brake, while falls that meet the tuned tile
   threshold should carry through. Keep max-speed entry through static matter

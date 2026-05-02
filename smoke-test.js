@@ -88,7 +88,6 @@ function setPlayer(g, x, y, state = "solid") {
   p.reboundStrength = 0;
   p.reboundTargetRiseTiles = 0;
   p.reboundLaunchVelocity = 0;
-  p.reboundCarryVelocity = 0;
   p.reboundExitY = null;
   p.stuckTimer = 0;
   p.flashTimer = 0;
