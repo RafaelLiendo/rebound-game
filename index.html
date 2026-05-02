@@ -62,30 +62,23 @@
       right: 18px;
       top: 16px;
       display: grid;
-      grid-template-columns: minmax(290px, 460px) max-content;
-      grid-template-areas:
-        "status controls"
-        "meter controls";
-      justify-content: space-between;
-      align-items: start;
-      column-gap: 16px;
-      row-gap: 8px;
+      grid-template-columns: minmax(280px, 1fr) minmax(150px, 220px) minmax(520px, 1.35fr);
+      gap: 12px;
+      align-items: center;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(14, 19, 25, 0.74);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
       pointer-events: none;
     }
 
     .status {
-      grid-area: status;
       display: flex;
       gap: 10px;
       align-items: center;
       min-width: 0;
-      min-height: 46px;
-      padding: 8px 10px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
-      backdrop-filter: blur(10px);
-      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
     }
 
     #stateLabel {
@@ -94,7 +87,7 @@
       color: #111820;
       border-radius: 6px;
       background: #f0c85f;
-      padding: 5px 8px;
+      padding: 4px 8px;
       font-size: 12px;
       font-weight: 800;
       letter-spacing: 0;
@@ -113,17 +106,14 @@
     }
 
     .meter {
-      grid-area: meter;
-      width: min(100%, 280px);
-      height: 16px;
+      width: 100%;
+      height: 18px;
       overflow: hidden;
       border: 1px solid var(--line);
       border-radius: 8px;
       background:
         linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px) 0 0 / 32px 100%,
         rgba(14, 19, 25, 0.8);
-      backdrop-filter: blur(10px);
-      box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
     }
 
     #pressureFill {
@@ -136,24 +126,85 @@
     }
 
     .controls {
-      grid-area: controls;
-      display: flex;
-      flex-direction: column;
-      gap: 7px;
-      justify-self: end;
-      min-width: 164px;
-      padding: 11px 14px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 5px;
+      width: 100%;
       color: var(--muted);
       font-size: 12px;
       font-weight: 700;
-      line-height: 1.22;
+      line-height: 1.2;
       pointer-events: none;
+    }
+
+    .control {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 7px;
+      align-items: center;
+      min-width: 0;
+      min-height: 25px;
+      padding: 3px 5px;
+      border: 1px solid rgba(244, 240, 223, 0.14);
+      border-radius: 6px;
+      background: rgba(244, 240, 223, 0.06);
+    }
+
+    .control:nth-child(-n + 3) {
+      grid-column: span 2;
+    }
+
+    .control:nth-child(n + 4) {
+      grid-column: span 3;
+      min-height: 29px;
+    }
+
+    .key {
+      min-width: 32px;
+      border-radius: 5px;
+      background: #f4f0df;
+      color: #111820;
+      padding: 2px 5px;
+      font-size: 10px;
+      font-weight: 900;
+      text-align: center;
       white-space: nowrap;
-      backdrop-filter: blur(10px);
-      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
+    }
+
+    .control-copy {
+      display: flex;
+      gap: 5px;
+      align-items: baseline;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .control-name,
+    .control-hint {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .control-name {
+      color: var(--ink);
+      font-weight: 850;
+    }
+
+    .control-hint {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 650;
+    }
+
+    @media (max-width: 980px) {
+      .hud {
+        grid-template-columns: minmax(240px, 1fr) minmax(150px, 220px);
+      }
+
+      .controls {
+        grid-column: 1 / -1;
+      }
     }
 
     @media (max-width: 720px) {
@@ -170,25 +221,20 @@
         left: 10px;
         right: 10px;
         top: 10px;
-        grid-template-columns: 1fr;
-        grid-template-areas:
-          "status"
-          "meter"
-          "controls";
+        grid-template-columns: minmax(0, 1fr);
         gap: 8px;
-      }
-
-      .meter {
-        width: min(100%, 220px);
-      }
-
-      .controls {
-        justify-self: start;
+        padding: 8px;
       }
 
       #messageLabel,
       .controls {
         font-size: 12px;
+      }
+
+      .control,
+      .control:nth-child(-n + 3),
+      .control:nth-child(n + 4) {
+        grid-column: span 6;
       }
     }
   </style>
@@ -205,11 +251,38 @@
         <span id="pressureFill"></span>
       </div>
       <div class="controls">
-        <span>Move A/D or Arrows</span>
-        <span>Jump Space</span>
-        <span>Permeate Shift</span>
-        <span>Assist Ctrl+Shift</span>
-        <span>Reset R</span>
+        <span class="control">
+          <span class="key">&larr; &rarr;</span>
+          <span class="control-copy">
+            <span class="control-name">Move</span>
+          </span>
+        </span>
+        <span class="control">
+          <span class="key">Space</span>
+          <span class="control-copy">
+            <span class="control-name">Jump</span>
+          </span>
+        </span>
+        <span class="control">
+          <span class="key">R</span>
+          <span class="control-copy">
+            <span class="control-name">Reset</span>
+          </span>
+        </span>
+        <span class="control">
+          <span class="key">Shift</span>
+          <span class="control-copy">
+            <span class="control-name">Permeate</span>
+            <span class="control-hint">hold to sink</span>
+          </span>
+        </span>
+        <span class="control">
+          <span class="key">Ctrl+Shift</span>
+          <span class="control-copy">
+            <span class="control-name">Assist</span>
+            <span class="control-hint">chain upward</span>
+          </span>
+        </span>
       </div>
     </section>
   </main>
