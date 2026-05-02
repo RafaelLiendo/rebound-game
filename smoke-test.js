@@ -353,6 +353,149 @@ function testBlockedUpwardEscapeBecomesStuck() {
   assert(g.overlappingSolidTiles(g.playerRect()).length === 0, "stuck recovery left player inside terrain");
 }
 
+function fixtureRows(width = 50) {
+  const rows = Array.from({ length: 45 }, () => Array(width).fill("."));
+  rows[43][1] = "S";
+  rows[10][width - 3] = "G";
+  for (let c = 0; c < width; c++) rows[44][c] = "#";
+  return rows.map((row) => row.join(""));
+}
+
+function pushDynamicFixture(g, entity, checkpoints = []) {
+  const index = g.LEVELS.length;
+  g.LEVELS.push({
+    name: "Dynamic Fixture",
+    map: fixtureRows(),
+    entities: [entity],
+    checkpoints
+  });
+  g.loadLevel(index);
+  return index;
+}
+
+function testMovingEntityStepsDeterministically() {
+  const g = makeGame();
+  const originalLength = g.LEVELS.length;
+
+  try {
+    pushDynamicFixture(g, {
+      type: "mover",
+      c: 8,
+      r: 30,
+      w: 4,
+      h: 1,
+      path: "horizontal",
+      ampX: 64,
+      ampY: 0,
+      speed: 1.5,
+      phase: 0,
+      role: "platform"
+    });
+
+    step(g, 30);
+    const e = g.entities[0];
+    const expected = e.baseX + Math.sin(g.levelTime * e.speed + e.phase) * e.ampX;
+    assertNear(e.x, expected, "moving platform x did not follow deterministic path");
+    assert(e.dx !== 0, "moving platform did not report frame delta");
+  } finally {
+    g.LEVELS.length = originalLength;
+    g.loadLevel(0);
+  }
+}
+
+function testSolidPlayerRidesMovingPlatform() {
+  const g = makeGame();
+  const originalLength = g.LEVELS.length;
+
+  try {
+    pushDynamicFixture(g, {
+      type: "mover",
+      c: 8,
+      r: 30,
+      w: 5,
+      h: 1,
+      path: "horizontal",
+      ampX: 80,
+      ampY: 0,
+      speed: 1.2,
+      phase: 0,
+      role: "platform"
+    });
+
+    const e = g.entities[0];
+    setPlayer(g, e.x + 24, e.y - g.CONFIG.PLAYER_H, "solid");
+    const startX = g.player.x;
+    step(g, 45);
+
+    assert(g.player.x > startX + 12, "solid player was not carried by moving platform");
+    assert(g.player.grounded === true, "player did not remain grounded on moving platform");
+  } finally {
+    g.LEVELS.length = originalLength;
+    g.loadLevel(0);
+  }
+}
+
+function testDynamicSolidCanTriggerRebound() {
+  const g = makeGame();
+  const originalLength = g.LEVELS.length;
+
+  try {
+    pushDynamicFixture(g, {
+      type: "mover",
+      c: 12,
+      r: 30,
+      w: 4,
+      h: 3,
+      path: "horizontal",
+      ampX: 0,
+      ampY: 0,
+      speed: 0,
+      phase: 0,
+      role: "rebound"
+    });
+
+    const e = g.entities[0];
+    setPlayer(g, e.x + 32, e.y + 34, "permeating");
+    release(g, "ShiftLeft");
+    step(g);
+
+    assert(g.overlappingSolidEntities(g.playerRect()).length > 0, "player was not embedded in dynamic solid");
+    assert(g.player.state === "rebounding", "dynamic solid release did not start rebound");
+  } finally {
+    g.LEVELS.length = originalLength;
+    g.loadLevel(0);
+  }
+}
+
+function testAsteroidImpactRecoversToCheckpoint() {
+  const g = makeGame();
+  const originalLength = g.LEVELS.length;
+
+  try {
+    pushDynamicFixture(g, {
+      type: "asteroid",
+      c: 12,
+      r: 30,
+      w: 3,
+      h: 3,
+      speed: 0,
+      period: 10,
+      phase: 1,
+      warning: 0
+    });
+
+    const e = g.entities[0];
+    setPlayer(g, e.x + 16, e.y + 16, "solid");
+    step(g);
+
+    assertNear(g.player.x, g.spawnCell.x + (g.CONFIG.TILE_SIZE - g.CONFIG.PLAYER_W) / 2, "asteroid did not recover player to checkpoint x");
+    assertNear(g.player.y, (g.spawnCell.r + 1) * g.CONFIG.TILE_SIZE - g.CONFIG.PLAYER_H, "asteroid did not recover player to checkpoint y");
+  } finally {
+    g.LEVELS.length = originalLength;
+    g.loadLevel(0);
+  }
+}
+
 const tests = [
   ["load level recalculates map", testLoadLevelRecalculatesMap],
   ["authored levels have valid starts", testAuthoredLevelsHaveValidMarkersAndStarts],
@@ -364,7 +507,11 @@ const tests = [
   ["auto assist climbs ten 2-gap tiles", testAutoAssistClimbsTenTileStack],
   ["manual queue consumes on surface", testManualQueueConsumesOnSurface],
   ["upper-body-only release waits until clear", testUpperBodyOnlyReleaseDoesNotRebound],
-  ["blocked upward escape recovers from stuck", testBlockedUpwardEscapeBecomesStuck]
+  ["blocked upward escape recovers from stuck", testBlockedUpwardEscapeBecomesStuck],
+  ["moving entity steps deterministically", testMovingEntityStepsDeterministically],
+  ["solid player rides moving platform", testSolidPlayerRidesMovingPlatform],
+  ["dynamic solid can trigger rebound", testDynamicSolidCanTriggerRebound],
+  ["asteroid impact recovers to checkpoint", testAsteroidImpactRecoversToCheckpoint]
 ];
 
 let passed = 0;

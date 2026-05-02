@@ -364,257 +364,238 @@
     var shake = 0;
 
     // === LEVEL DATA ===
-    var LEVELS = [
-      {
-        name: "Moon-Shadow Hall",
-        map: [
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          ".......................................................G....",
-          ".....................................................#######",
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          "........................................###############.....",
-          "........................................###############.....",
-          "............................................................",
-          "............................................................",
-          ".........................###############....................",
-          ".........................###############....................",
-          "............................................................",
-          "............................................................",
-          "............################................................",
-          "............################................................",
-          "............................................................",
-          "............................................................",
-          "..............................##############................",
-          "..............................##############................",
-          "............................................................",
-          "............................................................",
-          ".............................................##############.",
-          ".............................................##############.",
-          "............................................................",
-          "............................................................",
-          "..................................###############...........",
-          "..................................###############...........",
-          "............................................................",
-          "............................................................",
-          "................##############..............................",
-          "................##############..............................",
-          "............................................................",
-          "............................................................",
-          "..#############.............................................",
-          "..#############.............................................",
-          "............................................................",
-          ".S..........................................................",
-          "############################################################"
-        ]
-      },
-      {
-        name: "Open Claw Shrine",
-        map: [
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          ".......G....................................................",
-          "............................................................",
-          "....#########...............................................",
-          "............................................................",
-          "............................................................",
-          "..................##############............................",
-          "..................##############............................",
-          "............................................................",
-          "............................................................",
-          "...############.............................................",
-          "...############.............................................",
-          "............................................................",
-          "............................................................",
-          "..............#############.................................",
-          "..............#############.................................",
-          "............................................................",
-          "............................................................",
-          "................................############................",
-          "................................############................",
-          "............................................................",
-          "............................................................",
-          "............................................##############..",
-          "............................................##############..",
-          "............................................................",
-          "............................................................",
-          "............................#############...................",
-          "............................#############...................",
-          "............................................................",
-          "............................................................",
-          "..........#############.....................................",
-          "..........#############.....................................",
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          ".S..........................................................",
-          "############################################################"
-        ]
-      },
-      {
-        name: "City Under Watch",
-        map: [
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          ".....................................................G......",
-          "............................................................",
-          "..................................................##########",
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          ".......................................#############........",
-          ".......................................#############........",
-          "............................................................",
-          "............................................................",
-          "......................#############.........................",
-          "......................#############.........................",
-          "............................................................",
-          "....############............................................",
-          "....############............................................",
-          "............................................................",
-          "............................................................",
-          ".................#############..............................",
-          ".................#############..............................",
-          "............................................................",
-          "....................................############............",
-          "....................................############............",
-          "............................................................",
-          "............................................................",
-          "................................................###########.",
-          "................................................###########.",
-          "............................................................",
-          ".................................#############..............",
-          ".................................#############..............",
-          "............................................................",
-          "............................................................",
-          "...............############.................................",
-          "...............############.................................",
-          "............................................................",
-          "##########..................................................",
-          "##########..................................................",
-          "............................................................",
-          ".S..........................................................",
-          "############################################################"
-        ]
-      },
-      {
-        name: "Outer Hull Lattice",
-        map: [
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          "......G.....................................................",
-          "...#########................................................",
-          "............................................................",
-          "............................................................",
-          ".....................................##########.............",
-          ".....................................##########.............",
-          "............................................................",
-          "....................##########..............................",
-          "....................##########..............................",
-          "............................................................",
-          "............................................................",
-          "....##########..............................................",
-          "....##########..............................................",
-          "............................................................",
-          "............................................................",
-          "..................##########................................",
-          "..................##########................................",
-          "............................................................",
-          "...................................##########...............",
-          "...................................##########...............",
-          "............................................................",
-          "............................................................",
-          "...................................................#########",
-          "...................................................#########",
-          "............................................................",
-          "...........................................##########.......",
-          "...........................................##########.......",
-          "............................................................",
-          "............................................................",
-          "...........................##########.......................",
-          "...........................##########.......................",
-          "............................................................",
-          "............##########......................................",
-          "............##########......................................",
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          ".S..........................................................",
-          "############################################################"
-        ]
-      },
-      {
-        name: "Signal Crown Core",
-        map: [
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          "........................................................G...",
-          ".....................................................#######",
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          "............................................................",
-          "...............................................#########....",
-          "...............................................#########....",
-          "............................................................",
-          "............................................................",
-          "...................................#########................",
-          "...................................#########................",
-          "............................................................",
-          "...................#########................................",
-          "...................#########................................",
-          "............................................................",
-          "............................................................",
-          "......#########.............................................",
-          "......#########.............................................",
-          "............................................................",
-          "......................##########............................",
-          "......................##########............................",
-          "............................................................",
-          "............................................................",
-          ".......................................#########............",
-          ".......................................#########............",
-          "............................................................",
-          "................................................#########...",
-          "................................................#########...",
-          "............................................................",
-          "............................................................",
-          "...............................#########....................",
-          "...............................#########....................",
-          "............................................................",
-          "...............#########....................................",
-          "...............#########....................................",
-          "............................................................",
-          "#######.....................................................",
-          "............................................................",
-          ".S..........................................................",
-          "############################################################"
-        ]
+    function rect(c, r, w, h) {
+      return { c: c, r: r, w: w, h: h };
+    }
+
+    function mover(c, r, w, h, path, ax, ay, speed, phase, role) {
+      return {
+        type: "mover",
+        c: c,
+        r: r,
+        w: w,
+        h: h,
+        path: path,
+        ampX: ax === undefined ? 0 : ax,
+        ampY: ay === undefined ? 0 : ay,
+        speed: speed === undefined ? 1 : speed,
+        phase: phase === undefined ? 0 : phase,
+        role: role || "platform"
+      };
+    }
+
+    function asteroid(c, r, w, h, speed, period, phase, warning) {
+      return {
+        type: "asteroid",
+        c: c,
+        r: r,
+        w: w,
+        h: h,
+        speed: speed === undefined ? 260 : speed,
+        period: period === undefined ? 4 : period,
+        phase: phase === undefined ? 0 : phase,
+        warning: warning === undefined ? 0.75 : warning
+      };
+    }
+
+    function makeMap(cols, spawn, goal, blocks) {
+      var rows = [];
+      for (var r = 0; r < 45; r++) rows[r] = Array(cols + 1).join(".").split("");
+      for (var i = 0; i < blocks.length; i++) {
+        var b = blocks[i];
+        for (var y = b.r; y < b.r + b.h; y++) {
+          for (var x = b.c; x < b.c + b.w; x++) {
+            if (y >= 0 && y < rows.length && x >= 0 && x < cols) rows[y][x] = "#";
+          }
+        }
       }
+      rows[spawn.r][spawn.c] = "S";
+      rows[goal.r][goal.c] = "G";
+      return rows.map(function (row) { return row.join(""); });
+    }
+
+    function level(name, cols, spawn, goal, blocks, entities, checkpoints) {
+      return {
+        name: name,
+        map: makeMap(cols, spawn, goal, blocks),
+        entities: entities || [],
+        checkpoints: checkpoints || []
+      };
+    }
+
+    var LEVELS = [
+      level(
+        "Shadow Sink Gate",
+        72,
+        { c: 2, r: 43 },
+        { c: 67, r: 9 },
+        [
+          rect(0, 44, 72, 1),
+          rect(0, 43, 12, 1),
+          rect(11, 39, 14, 1),
+          rect(23, 35, 16, 1),
+          rect(36, 31, 15, 1),
+          rect(49, 27, 13, 4),
+          rect(61, 19, 5, 1),
+          rect(64, 10, 8, 1)
+        ],
+        [],
+        [{ c: 36, r: 30 }]
+      ),
+      level(
+        "Pressure Well Choir",
+        72,
+        { c: 2, r: 43 },
+        { c: 64, r: 7 },
+        [
+          rect(0, 44, 72, 1),
+          rect(0, 43, 11, 1),
+          rect(9, 38, 11, 2),
+          rect(23, 33, 10, 3),
+          rect(37, 26, 10, 5),
+          rect(51, 18, 10, 7),
+          rect(62, 8, 10, 1),
+          rect(4, 29, 6, 1),
+          rect(17, 23, 5, 1),
+          rect(31, 16, 5, 1)
+        ],
+        [],
+        [{ c: 37, r: 25 }]
+      ),
+      level(
+        "Momentum Court",
+        86,
+        { c: 2, r: 43 },
+        { c: 80, r: 8 },
+        [
+          rect(0, 44, 86, 1),
+          rect(0, 43, 12, 1),
+          rect(15, 37, 10, 3),
+          rect(31, 31, 9, 3),
+          rect(47, 25, 9, 4),
+          rect(63, 18, 9, 5),
+          rect(78, 9, 8, 1),
+          rect(6, 25, 8, 1),
+          rect(23, 19, 6, 1),
+          rect(41, 14, 6, 1)
+        ],
+        [],
+        [{ c: 47, r: 24 }]
+      ),
+      level(
+        "Pendulum Liftworks",
+        78,
+        { c: 2, r: 43 },
+        { c: 72, r: 7 },
+        [
+          rect(0, 44, 78, 1),
+          rect(0, 43, 10, 1),
+          rect(69, 8, 9, 1),
+          rect(17, 36, 6, 2),
+          rect(37, 25, 6, 3),
+          rect(56, 16, 6, 4)
+        ],
+        [
+          mover(12, 39, 7, 1, "horizontal", 96, 0, 1.6, 0, "platform"),
+          mover(27, 33, 6, 2, "vertical", 0, 92, 1.3, 1.2, "rebound"),
+          mover(46, 23, 6, 2, "circle", 82, 62, 1.1, 0.4, "rebound"),
+          mover(62, 12, 6, 1, "horizontal", 74, 0, 1.8, 2.3, "platform")
+        ],
+        [{ c: 37, r: 24 }]
+      ),
+      level(
+        "Falling Star Atrium",
+        66,
+        { c: 3, r: 43 },
+        { c: 58, r: 6 },
+        [
+          rect(0, 44, 66, 1),
+          rect(0, 43, 12, 1),
+          rect(55, 7, 11, 1),
+          rect(3, 34, 8, 1),
+          rect(50, 28, 7, 1),
+          rect(5, 21, 7, 1),
+          rect(47, 14, 7, 1)
+        ],
+        [
+          asteroid(18, 2, 4, 3, 235, 4.6, 0, 0.8),
+          asteroid(31, 0, 5, 3, 260, 4.2, 1.1, 0.7),
+          asteroid(43, 1, 4, 4, 245, 4.8, 2.0, 0.85),
+          asteroid(25, 5, 5, 2, 285, 3.8, 2.9, 0.65)
+        ],
+        [{ c: 50, r: 27 }]
+      ),
+      level(
+        "Rooftop Drop Exchange",
+        82,
+        { c: 4, r: 31 },
+        { c: 76, r: 5 },
+        [
+          rect(0, 44, 82, 1),
+          rect(0, 32, 14, 1),
+          rect(16, 36, 12, 1),
+          rect(31, 39, 12, 1),
+          rect(45, 34, 12, 1),
+          rect(58, 28, 13, 6),
+          rect(73, 6, 9, 1),
+          rect(8, 22, 8, 1),
+          rect(22, 17, 7, 1),
+          rect(39, 12, 7, 1)
+        ],
+        [
+          mover(15, 26, 6, 1, "horizontal", 84, 0, 1.5, 1.4, "platform")
+        ],
+        [{ c: 45, r: 33 }]
+      ),
+      level(
+        "Open Claw Chainspire",
+        74,
+        { c: 2, r: 43 },
+        { c: 67, r: 5 },
+        [
+          rect(0, 44, 74, 1),
+          rect(0, 43, 9, 1),
+          rect(11, 38, 7, 2),
+          rect(20, 33, 7, 2),
+          rect(30, 28, 7, 2),
+          rect(40, 23, 7, 2),
+          rect(50, 18, 7, 2),
+          rect(60, 13, 7, 2),
+          rect(65, 6, 9, 1)
+        ],
+        [
+          mover(15, 36, 4, 2, "vertical", 0, 42, 1.9, 0.2, "rebound"),
+          mover(25, 31, 4, 2, "vertical", 0, 42, 1.9, 1.1, "rebound"),
+          mover(35, 26, 4, 2, "vertical", 0, 42, 1.9, 2.0, "rebound"),
+          mover(45, 21, 4, 2, "vertical", 0, 42, 1.9, 2.9, "rebound")
+        ],
+        [{ c: 40, r: 22 }]
+      ),
+      level(
+        "Signal Crown Debris Field",
+        92,
+        { c: 3, r: 43 },
+        { c: 86, r: 4 },
+        [
+          rect(0, 44, 92, 1),
+          rect(0, 43, 11, 1),
+          rect(13, 39, 7, 2),
+          rect(29, 33, 8, 3),
+          rect(48, 28, 8, 4),
+          rect(66, 20, 9, 5),
+          rect(83, 5, 9, 1),
+          rect(8, 25, 7, 1),
+          rect(38, 17, 6, 1)
+        ],
+        [
+          mover(19, 36, 6, 2, "circle", 72, 48, 1.4, 0, "rebound"),
+          asteroid(40, 0, 4, 3, 270, 4.1, 0.7, 0.7),
+          mover(58, 23, 7, 2, "horizontal", 110, 0, 1.7, 1.6, "rebound"),
+          asteroid(73, 1, 5, 4, 255, 4.7, 2.4, 0.85),
+          mover(78, 11, 6, 1, "circle", 62, 52, 1.25, 3.1, "platform")
+        ],
+        [{ c: 48, r: 27 }]
+      )
     ];
 
     var currentLevelIndex = 0;
@@ -624,6 +605,10 @@
     var levelH = 0;
     var levelW = 0;
     var tiles = [];
+    var entities = [];
+    var checkpoints = [];
+    var activeCheckpoint = { c: 1, r: 43, x: TS, y: 43 * TS };
+    var levelTime = 0;
     var spawnCell = { c: 1, r: 43, x: TS, y: 43 * TS };
     var goalRect = { x: 27 * TS, y: 13 * TS, w: TS, h: TS };
 
@@ -651,6 +636,77 @@
           if (ch === "S") spawnCell = { c: c, r: r, x: c * TS, y: r * TS };
           if (ch === "G") goalRect = { x: c * TS, y: r * TS, w: TS, h: TS };
         }
+      }
+    }
+
+    function entityFromDef(def) {
+      var e = {};
+      for (var k in def) e[k] = def[k];
+      e.baseX = def.c * TS;
+      e.baseY = def.r * TS;
+      e.w = def.w * TS;
+      e.h = def.h * TS;
+      e.x = e.baseX;
+      e.y = e.baseY;
+      e.prevX = e.x;
+      e.prevY = e.y;
+      e.dx = 0;
+      e.dy = 0;
+      e.solid = true;
+      return e;
+    }
+
+    function checkpointFromDef(def) {
+      return { c: def.c, r: def.r, x: def.c * TS, y: def.r * TS, w: TS, h: TS };
+    }
+
+    function updateEntityPosition(e, time) {
+      var phase = time * (e.speed === undefined ? 1 : e.speed) + (e.phase || 0);
+      var x = e.baseX;
+      var y = e.baseY;
+      if (e.type === "mover") {
+        if (e.path === "horizontal") {
+          x += Math.sin(phase) * (e.ampX || 0);
+        } else if (e.path === "vertical") {
+          y += Math.sin(phase) * (e.ampY || 0);
+        } else if (e.path === "circle") {
+          x += Math.cos(phase) * (e.ampX || 0);
+          y += Math.sin(phase) * (e.ampY || 0);
+        }
+      } else if (e.type === "asteroid") {
+        var period = e.period === undefined ? 4 : e.period;
+        var local = (time + (e.phase || 0)) % period;
+        if (local < 0) local += period;
+        var warning = e.warning === undefined ? 0.75 : e.warning;
+        e.warningActive = local < warning;
+        x = e.baseX;
+        y = e.baseY + Math.max(0, local - warning) * (e.speed === undefined ? 260 : e.speed);
+      }
+      e.x = x;
+      e.y = y;
+    }
+
+    function initLevelRuntime() {
+      levelTime = 0;
+      entities = (LEVELS[currentLevelIndex].entities || []).map(entityFromDef);
+      checkpoints = (LEVELS[currentLevelIndex].checkpoints || []).map(checkpointFromDef);
+      activeCheckpoint = { c: spawnCell.c, r: spawnCell.r, x: spawnCell.x, y: spawnCell.y, w: TS, h: TS };
+      for (var i = 0; i < entities.length; i++) {
+        updateEntityPosition(entities[i], levelTime);
+        entities[i].prevX = entities[i].x;
+        entities[i].prevY = entities[i].y;
+      }
+    }
+
+    function updateEntities(dt) {
+      levelTime += dt;
+      for (var i = 0; i < entities.length; i++) {
+        var e = entities[i];
+        e.prevX = e.x;
+        e.prevY = e.y;
+        updateEntityPosition(e, levelTime);
+        e.dx = e.x - e.prevX;
+        e.dy = e.y - e.prevY;
       }
     }
 
@@ -753,6 +809,7 @@
       currentLevelIndex = nextIndex;
       LEVEL = LEVELS[currentLevelIndex].map;
       parseLevel();
+      initLevelRuntime();
       spawnPlayer();
     }
 
@@ -855,8 +912,37 @@
       return out;
     }
 
+    function solidTileRects(rect) {
+      return overlappingSolidTiles(rect).map(function (t) {
+        return { type: "tile", c: t.c, r: t.r, x: t.c * TS, y: t.r * TS, w: TS, h: TS };
+      });
+    }
+
+    function entityRect(e) {
+      return { type: e.type, entity: e, x: e.x, y: e.y, w: e.w, h: e.h };
+    }
+
+    function overlappingSolidEntities(rect) {
+      var out = [];
+      for (var i = 0; i < entities.length; i++) {
+        var e = entities[i];
+        if (e.solid && rectsOverlap(rect, entityRect(e))) out.push(e);
+      }
+      return out;
+    }
+
+    function overlappingSolidMatter(rect) {
+      var out = solidTileRects(rect);
+      for (var i = 0; i < entities.length; i++) {
+        var e = entities[i];
+        var er = entityRect(e);
+        if (e.solid && rectsOverlap(rect, er)) out.push(er);
+      }
+      return out;
+    }
+
     function bottomHalfOverlapsSolid(rect) {
-      return overlappingSolidTiles(bottomHalfRect(rect)).length > 0;
+      return overlappingSolidMatter(bottomHalfRect(rect)).length > 0;
     }
 
     function laneColumns(rect) {
@@ -912,9 +998,9 @@
       return count;
     }
 
-    function embeddedDepthInfo(rect) {
+    function staticEmbeddedDepthInfo(rect) {
       var ext = contiguousMassExtents(rect);
-      if (!ext || !bottomHalfOverlapsSolid(rect)) {
+      if (!ext || overlappingSolidTiles(bottomHalfRect(rect)).length === 0) {
         return { pixels: 0, strength: 0 };
       }
 
@@ -923,16 +1009,45 @@
       return { pixels: depthPixels, strength: strength };
     }
 
+    function dynamicEmbeddedDepthInfo(rect) {
+      var bottom = bottomHalfRect(rect);
+      var best = { pixels: 0, strength: 0, entity: null, stuck: false };
+      for (var i = 0; i < entities.length; i++) {
+        var e = entities[i];
+        if (!e.solid || !rectsOverlap(bottom, entityRect(e))) continue;
+        var depthPixels = clamp(rect.y + rect.h - e.y, 0, CONFIG.PLAYER_H + TS * 2);
+        var strength = clamp(depthPixels / (CONFIG.PLAYER_H + TS), 0.22, 1);
+        if (strength > best.strength) {
+          best = {
+            pixels: depthPixels,
+            strength: strength,
+            entity: e,
+            stuck: (rect.y - e.y) > CONFIG.STUCK_SEARCH_RADIUS * TS
+          };
+        }
+      }
+      return best;
+    }
+
+    function embeddedDepthInfo(rect) {
+      var stat = staticEmbeddedDepthInfo(rect);
+      var dyn = dynamicEmbeddedDepthInfo(rect);
+      if (dyn.strength > stat.strength) return dyn;
+      return stat;
+    }
+
     function shouldRebound(rect) {
       if (!bottomHalfOverlapsSolid(rect)) return { fire: false, stuck: false, rows: 0, strength: 0 };
       var rows = countSolidRowsAbove(rect);
+      var dynamicDepth = dynamicEmbeddedDepthInfo(rect);
       var depth = embeddedDepthInfo(rect);
       return {
         fire: true,
-        stuck: rows > CONFIG.STUCK_SEARCH_RADIUS,
-        rows: rows,
+        stuck: rows > CONFIG.STUCK_SEARCH_RADIUS || !!dynamicDepth.stuck,
+        rows: Math.max(rows, dynamicDepth.entity ? Math.ceil(dynamicDepth.pixels / TS) : 0),
         depth: depth.pixels,
-        strength: depth.strength
+        strength: depth.strength,
+        entity: depth.entity || null
       };
     }
 
@@ -1001,28 +1116,28 @@
         var stepAmount = Math.min(1, remaining) * sign;
         if (axis === "x") {
           player.x += stepAmount;
-          var xHits = overlappingSolidTiles(playerRect());
+          var xHits = overlappingSolidMatter(playerRect());
           if (xHits.length > 0) {
             if (sign > 0) {
-              var minCol = xHits.reduce(function (m, t) { return Math.min(m, t.c); }, Infinity);
-              player.x = minCol * TS - CONFIG.PLAYER_W;
+              var minX = xHits.reduce(function (m, t) { return Math.min(m, t.x); }, Infinity);
+              player.x = minX - CONFIG.PLAYER_W;
             } else {
-              var maxCol = xHits.reduce(function (m, t) { return Math.max(m, t.c); }, -Infinity);
-              player.x = (maxCol + 1) * TS;
+              var maxX = xHits.reduce(function (m, t) { return Math.max(m, t.x + t.w); }, -Infinity);
+              player.x = maxX;
             }
             player.vx = 0;
             break;
           }
         } else {
           player.y += stepAmount;
-          var yHits = overlappingSolidTiles(playerRect());
+          var yHits = overlappingSolidMatter(playerRect());
           if (yHits.length > 0) {
             if (sign > 0) {
-              var minRow = yHits.reduce(function (m, t) { return Math.min(m, t.r); }, Infinity);
-              player.y = minRow * TS - CONFIG.PLAYER_H;
+              var minY = yHits.reduce(function (m, t) { return Math.min(m, t.y); }, Infinity);
+              player.y = minY - CONFIG.PLAYER_H;
             } else {
-              var maxRow = yHits.reduce(function (m, t) { return Math.max(m, t.r); }, -Infinity);
-              player.y = (maxRow + 1) * TS;
+              var maxY = yHits.reduce(function (m, t) { return Math.max(m, t.y + t.h); }, -Infinity);
+              player.y = maxY;
             }
             if (sign > 0) player.grounded = true;
             player.vy = 0;
@@ -1036,13 +1151,13 @@
     }
 
     function probeGrounded() {
-      if (overlappingSolidTiles(playerRect()).length > 0) {
+      if (overlappingSolidMatter(playerRect()).length > 0) {
         player.grounded = false;
         return false;
       }
       var rect = playerRect();
       var probe = { x: rect.x, y: rect.y + 1, w: rect.w, h: rect.h };
-      player.grounded = overlappingSolidTiles(probe).length > 0;
+      player.grounded = overlappingSolidMatter(probe).length > 0;
       return player.grounded;
     }
 
@@ -1057,6 +1172,54 @@
       player.queuedPermeate = false;
       player.queuedPermeateSource = null;
       probeGrounded();
+    }
+
+    function recoverToCheckpoint() {
+      placePlayerAtCell(activeCheckpoint.c, activeCheckpoint.r);
+      player.flashTimer = 0.35;
+      shake = 10;
+      spawnRipple(player.x + CONFIG.PLAYER_W / 2, player.y + CONFIG.PLAYER_H / 2, 0.55);
+    }
+
+    function updateCheckpointState() {
+      var rect = playerRect();
+      for (var i = 0; i < checkpoints.length; i++) {
+        var cp = checkpoints[i];
+        if (rectsOverlap(rect, cp)) activeCheckpoint = cp;
+      }
+    }
+
+    function standingOnPreviousEntity(e) {
+      var rect = playerRect();
+      var feet = rect.y + rect.h;
+      var overlapX = rect.x + rect.w > e.prevX + 1 && rect.x < e.prevX + e.w - 1;
+      return overlapX && feet >= e.prevY - 2 && feet <= e.prevY + 4;
+    }
+
+    function carryPlayerOnEntities() {
+      if (player.state !== "solid" && !(player.state === "rebounding" && player.reboundSurfaced)) return;
+      for (var i = 0; i < entities.length; i++) {
+        var e = entities[i];
+        if (!e.solid || e.type !== "mover" || !standingOnPreviousEntity(e)) continue;
+        player.x += e.dx;
+        player.y += e.dy;
+      }
+      player.x = clamp(player.x, 0, levelW - CONFIG.PLAYER_W);
+      player.y = Math.min(player.y, levelH - CONFIG.PLAYER_H);
+    }
+
+    function handleAsteroidImpacts() {
+      if (player.state === "permeating" || (player.state === "rebounding" && !player.reboundSurfaced)) return false;
+      var rect = playerRect();
+      var impactProbe = { x: rect.x, y: rect.y + 1, w: rect.w, h: rect.h };
+      for (var i = 0; i < entities.length; i++) {
+        var e = entities[i];
+        if (e.type === "asteroid" && (rectsOverlap(rect, entityRect(e)) || rectsOverlap(impactProbe, entityRect(e)))) {
+          recoverToCheckpoint();
+          return true;
+        }
+      }
+      return false;
     }
 
     function triggerReboundOrStuck(result) {
@@ -1105,6 +1268,13 @@
         return;
       }
 
+      updateEntities(dt);
+      carryPlayerOnEntities();
+      if (handleAsteroidImpacts()) {
+        clearEdges();
+        return;
+      }
+
       var autoChainActive = !!(permeateHeld() && assistHeld());
       if (!autoChainActive && player.queuedPermeateSource === "auto") {
         player.queuedPermeate = false;
@@ -1141,7 +1311,7 @@
 
       if (player.state === "permeating") {
         var rect = playerRect();
-        var fullOverlap = overlappingSolidTiles(rect).length > 0;
+        var fullOverlap = overlappingSolidMatter(rect).length > 0;
         var rebound = shouldRebound(rect);
         player.embeddedDepth = rebound.depth || (fullOverlap ? embeddedDepthInfo(rect).pixels : 0);
         if (autoChainActive && rebound.fire) {
@@ -1163,7 +1333,7 @@
         }
       }
 
-      if (player.state === "permeating" && player.permeateUntilClear && overlappingSolidTiles(playerRect()).length === 0) {
+      if (player.state === "permeating" && player.permeateUntilClear && overlappingSolidMatter(playerRect()).length === 0) {
         player.permeateUntilClear = false;
         player.state = "solid";
       }
@@ -1193,7 +1363,7 @@
         skipVerticalForce = true;
       }
 
-      var embedded = overlappingSolidTiles(playerRect()).length > 0;
+      var embedded = overlappingSolidMatter(playerRect()).length > 0;
       if (player.state === "permeating" && embedded && Math.random() < 0.45) {
         var chargeForParticle = clamp((player.embeddedDepth || 0) / (CONFIG.PLAYER_H + TS), 0, 1);
         spawnMatterParticle(
@@ -1246,7 +1416,7 @@
         }
       }
 
-      embedded = overlappingSolidTiles(playerRect()).length > 0;
+      embedded = overlappingSolidMatter(playerRect()).length > 0;
       if (player.state === "permeating" || (player.state === "rebounding" && embedded && !player.reboundSurfaced)) {
         player.x += player.vx;
         player.y += player.vy;
@@ -1259,9 +1429,14 @@
 
       probeGrounded();
       if (player.grounded) player.coyoteTimer = CONFIG.COYOTE_FRAMES;
+      updateCheckpointState();
+      if (handleAsteroidImpacts()) {
+        clearEdges();
+        return;
+      }
 
       if (player.state === "rebounding") {
-        var nowEmbedded = overlappingSolidTiles(playerRect()).length > 0;
+        var nowEmbedded = overlappingSolidMatter(playerRect()).length > 0;
         if (!nowEmbedded && !player.reboundSurfaced) {
           player.reboundSurfaced = true;
           player.reboundAirborneTimer = CONFIG.REBOUND_STATE_DURATION;
@@ -1314,6 +1489,7 @@
       ctx.translate(sx - Math.round(cameraX), sy - Math.round(cameraY));
       drawBackground();
       drawTiles();
+      drawEntities();
       drawGoal();
       drawParticles();
       drawPlayer();
@@ -1444,6 +1620,66 @@
           ctx.stroke();
           ctx.restore();
         }
+      }
+    }
+
+    function drawEntities() {
+      for (var i = 0; i < checkpoints.length; i++) {
+        var cp = checkpoints[i];
+        var active = activeCheckpoint.c === cp.c && activeCheckpoint.r === cp.r;
+        ctx.save();
+        ctx.globalAlpha = active ? 0.6 : 0.32;
+        ctx.strokeStyle = active ? "#ff5cf4" : "#4be7ff";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        roundRect(cp.x + 4, cp.y + 4, TS - 8, TS - 8, 6);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      for (var j = 0; j < entities.length; j++) {
+        var e = entities[j];
+        ctx.save();
+        if (e.type === "asteroid") {
+          if (e.warningActive) {
+            ctx.globalAlpha = 0.2 + 0.18 * Math.sin(levelTime * 18 + j);
+            ctx.fillStyle = "#ff5cf4";
+            ctx.fillRect(e.x, 0, e.w, levelH);
+            ctx.globalAlpha = 0.85;
+          }
+          ctx.shadowColor = "#ff5cf4";
+          ctx.shadowBlur = 14;
+          ctx.fillStyle = "#3b2859";
+          ctx.strokeStyle = "#ff6df7";
+          ctx.lineWidth = 2;
+          roundRect(e.x, e.y, e.w, e.h, 10);
+          ctx.fill();
+          ctx.stroke();
+          ctx.globalAlpha = 0.42;
+          ctx.strokeStyle = "#f6f3ff";
+          ctx.beginPath();
+          ctx.moveTo(e.x + 8, e.y + e.h - 9);
+          ctx.lineTo(e.x + e.w * 0.45, e.y + 8);
+          ctx.lineTo(e.x + e.w - 10, e.y + e.h * 0.55);
+          ctx.stroke();
+        } else {
+          var rebound = e.role === "rebound";
+          var grad = ctx.createLinearGradient(e.x, e.y, e.x, e.y + e.h);
+          grad.addColorStop(0, rebound ? "#5e367e" : "#255b78");
+          grad.addColorStop(1, rebound ? "#171033" : "#0d2438");
+          ctx.shadowColor = rebound ? "#ff5cf4" : "#4be7ff";
+          ctx.shadowBlur = rebound ? 16 : 10;
+          ctx.fillStyle = grad;
+          ctx.strokeStyle = rebound ? "#ff6df7" : "#77e8ff";
+          ctx.lineWidth = 2;
+          roundRect(e.x, e.y, e.w, e.h, 6);
+          ctx.fill();
+          ctx.stroke();
+          ctx.globalAlpha = 0.22;
+          ctx.fillStyle = rebound ? "#ff5cf4" : "#4be7ff";
+          ctx.fillRect(e.x, e.y, e.w, 4);
+        }
+        ctx.restore();
       }
     }
 
@@ -1684,6 +1920,7 @@
       ctx.translate(sx - Math.round(cameraX), sy - Math.round(cameraY));
       drawBackground();
       drawTiles();
+      drawEntities();
       drawGoal();
       drawParticles();
       drawPlayer();
@@ -1708,6 +1945,10 @@
       get cameraX() { return cameraX; },
       get cameraY() { return cameraY; },
       get tiles() { return tiles; },
+      get entities() { return entities; },
+      get checkpoints() { return checkpoints; },
+      get activeCheckpoint() { return activeCheckpoint; },
+      get levelTime() { return levelTime; },
       player: player,
       keys: keys,
       keyEdge: keyEdge,
@@ -1727,6 +1968,8 @@
       playerRect: playerRect,
       bottomHalfRect: bottomHalfRect,
       overlappingSolidTiles: overlappingSolidTiles,
+      overlappingSolidEntities: overlappingSolidEntities,
+      overlappingSolidMatter: overlappingSolidMatter,
       bottomHalfOverlapsSolid: bottomHalfOverlapsSolid,
       contiguousMassExtents: contiguousMassExtents,
       countSolidRowsAbove: countSolidRowsAbove,
@@ -1734,6 +1977,8 @@
       moveAndCollide: moveAndCollide,
       probeGrounded: probeGrounded,
       placePlayerAtCell: placePlayerAtCell,
+      recoverToCheckpoint: recoverToCheckpoint,
+      updateEntities: updateEntities,
       beginRebound: beginRebound
     };
   }());
