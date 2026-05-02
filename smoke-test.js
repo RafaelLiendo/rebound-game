@@ -487,7 +487,7 @@ function testPermeationBottomBrakeResistsDeepSinking() {
   step(g);
 
   assert(g.player.vy < 8, "deep permeation did not brake downward speed");
-  assert(g.player.vy <= g.CONFIG.PERMEATE_DIVE_MAX_SPEED, "deep permeation exceeded dive speed cap");
+  assert(g.player.vy <= g.CONFIG.PERMEATE_MATTER_MAX_SPEED, "deep permeation exceeded matter speed cap");
 }
 
 function testShortFallDoesNotAccidentallyPermeateThroughThinMass() {

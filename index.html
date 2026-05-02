@@ -350,11 +350,9 @@
       PERMEATE_DRAG: 0.08,
       PERMEATE_PULL_ACCEL: 0.34,
       PERMEATE_BOTTOM_BRAKE_ACCEL: 0.12,
-      PERMEATE_MATTER_MAX_SPEED: 8.5,
-      PERMEATE_DIVE_SPEED: 6,
-      PERMEATE_DIVE_DRAG: 0.025,
-      PERMEATE_DIVE_PULL_SCALE: 0.08,
-      PERMEATE_DIVE_MAX_SPEED: 12,
+      PERMEATE_MATTER_MAX_SPEED: 12,
+      PERMEATE_MOMENTUM_FADE_SPEED: 4.5,
+      PERMEATE_MIN_RESISTANCE: 0.18,
       STUCK_SEARCH_RADIUS: 6,
       STUCK_DURATION: 0.5,
       PLAYER_W: 24,
@@ -1948,19 +1946,18 @@
             // vertical midpoint. The latch deliberately skips this section so a
             // top-half-only release can drift fully clear instead of being re-caught.
             var pullMass = matterMassInfo(playerRect());
-            var fastDive = player.vy > CONFIG.PERMEATE_DIVE_SPEED;
-            var drag = fastDive ? CONFIG.PERMEATE_DIVE_DRAG : CONFIG.PERMEATE_DRAG;
-            var pullScale = fastDive ? CONFIG.PERMEATE_DIVE_PULL_SCALE : 1;
-            player.vy *= (1 - drag);
+            var diveFade = clamp((player.vy - CONFIG.PERMEATE_MOMENTUM_FADE_SPEED) /
+              (CONFIG.MAX_FALL_SPEED - CONFIG.PERMEATE_MOMENTUM_FADE_SPEED), 0, 1);
+            var resistance = 1 - diveFade * (1 - CONFIG.PERMEATE_MIN_RESISTANCE);
+            player.vy *= (1 - CONFIG.PERMEATE_DRAG * resistance);
             if (pullMass.centerY !== null) {
               var center = player.y + CONFIG.PLAYER_H / 2;
               if (Math.abs(pullMass.centerY - center) > 2) {
-                player.vy += Math.sign(pullMass.centerY - center) * CONFIG.PERMEATE_PULL_ACCEL * pullScale;
+                player.vy += Math.sign(pullMass.centerY - center) * CONFIG.PERMEATE_PULL_ACCEL * resistance;
               }
-              player.vy -= permeationBottomBrake(pullMass, playerRect()) * pullScale;
+              player.vy -= permeationBottomBrake(pullMass, playerRect()) * resistance;
             }
-            var matterMaxSpeed = fastDive ? CONFIG.PERMEATE_DIVE_MAX_SPEED : CONFIG.PERMEATE_MATTER_MAX_SPEED;
-            player.vy = clamp(player.vy, -matterMaxSpeed, matterMaxSpeed);
+            player.vy = clamp(player.vy, -CONFIG.PERMEATE_MATTER_MAX_SPEED, CONFIG.PERMEATE_MATTER_MAX_SPEED);
           } else {
             player.embeddedDepth = 0;
             player.vy = Math.min(CONFIG.MAX_FALL_SPEED, player.vy + CONFIG.GRAVITY);
