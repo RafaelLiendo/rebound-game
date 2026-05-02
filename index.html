@@ -125,17 +125,19 @@
     }
 
     .meter {
+      position: relative;
       width: 100%;
       height: 8px;
       overflow: hidden;
       border: 1px solid rgba(166, 224, 255, 0.24);
       border-radius: 999px;
-      background:
-        linear-gradient(90deg, rgba(255, 255, 255, 0.09) 1px, transparent 1px) 0 0 / 28px 100%,
-        rgba(6, 8, 22, 0.86);
+      background: rgba(6, 8, 22, 0.86);
     }
 
     #pressureFill {
+      position: absolute;
+      z-index: 1;
+      inset: 0 auto 0 0;
       display: block;
       width: 0%;
       height: 100%;
@@ -143,6 +145,19 @@
       background: linear-gradient(90deg, #4be7ff, #b56cff 58%, #ff5cf4);
       box-shadow: 0 0 14px rgba(181, 108, 255, 0.82);
       transition: width 90ms linear;
+    }
+
+    .meterSegments {
+      position: absolute;
+      z-index: 2;
+      inset: 0;
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      pointer-events: none;
+    }
+
+    .meterSegment + .meterSegment {
+      border-left: 2px solid rgba(255, 255, 255, 0.09);
     }
 
     .controls {
@@ -281,8 +296,15 @@
     <canvas id="game" width="960" height="540" aria-label="Permeation buoyancy game demo"></canvas>
     <section class="hud" aria-label="Game status">
       <div class="readout">
-        <div class="meter" aria-label="pressure">
+        <div id="pressureMeter" class="meter" role="progressbar" aria-label="rebound depth" aria-valuemin="0" aria-valuemax="5" aria-valuenow="0" aria-valuetext="0.0/5">
           <span id="pressureFill"></span>
+          <span class="meterSegments" aria-hidden="true">
+            <span class="meterSegment"></span>
+            <span class="meterSegment"></span>
+            <span class="meterSegment"></span>
+            <span class="meterSegment"></span>
+            <span class="meterSegment"></span>
+          </span>
         </div>
         <div class="status">
           <span id="stateLabel">solid</span>
@@ -362,6 +384,7 @@
     var ctx = canvas.getContext("2d");
     var stateLabel = document.getElementById("stateLabel");
     var messageLabel = document.getElementById("messageLabel");
+    var pressureMeter = document.getElementById("pressureMeter");
     var pressureFill = document.getElementById("pressureFill");
     var particles = [];
     var ripples = [];
@@ -1395,6 +1418,7 @@
       permeateUntilClear: false,
       permeateStartFeetY: null,
       embeddedDepth: 0,
+      reboundMeterLevel: 0,
       reboundStrength: 0,
       reboundTargetRiseTiles: 0,
       reboundLaunchVelocity: 0,
@@ -1422,6 +1446,7 @@
       player.permeateUntilClear = false;
       player.permeateStartFeetY = null;
       player.embeddedDepth = 0;
+      player.reboundMeterLevel = 0;
       player.reboundStrength = 0;
       player.reboundTargetRiseTiles = 0;
       player.reboundLaunchVelocity = 0;
@@ -1649,6 +1674,26 @@
         clamp((feetDepth - centerDepth) / Math.max(1, massPixels - centerDepth), 0, 1);
     }
 
+    function reboundMeterLevel(depthPixels, massPixels) {
+      if (depthPixels <= 0 || massPixels <= 0) return 0;
+      var cappedRows = Math.max(1, Math.min(
+        Math.ceil(massPixels / TS),
+        CONFIG.REBOUND_TUNED_MAX_ROWS
+      ));
+      var tunedMassPixels = cappedRows * TS;
+      var tunedDepthPixels = clamp(depthPixels, 0, tunedMassPixels);
+      var centerDepth = tunedMassPixels / 2;
+      var centerLevel = cappedRows - 0.5;
+      if (tunedDepthPixels <= centerDepth) {
+        return clamp(centerLevel * tunedDepthPixels / Math.max(1, centerDepth), 0, CONFIG.REBOUND_TUNED_MAX_ROWS);
+      }
+      return clamp(centerLevel + 0.5 *
+        (tunedDepthPixels - centerDepth) / Math.max(1, tunedMassPixels - centerDepth),
+        0,
+        CONFIG.REBOUND_TUNED_MAX_ROWS
+      );
+    }
+
     var launchSpeedCache = {};
 
     function ballisticRisePixels(launchSpeed) {
@@ -1717,10 +1762,12 @@
       var targetRiseTiles = tuning.targetRiseTiles;
       var launchVelocity = tuning.launchVelocity;
       var strength = reboundVisualCharge(targetRiseTiles);
+      var meterLevel = reboundMeterLevel(depthPixels, massPixels);
       var rows = Math.ceil(depthPixels / TS);
       return {
         type: "tile",
         pixels: depthPixels,
+        meterLevel: meterLevel,
         strength: strength,
         rows: rows,
         massRows: ext.botRow - ext.topRow + 1,
@@ -1747,10 +1794,12 @@
         var targetRiseTiles = tuning.targetRiseTiles;
         var launchVelocity = tuning.launchVelocity;
         var strength = reboundVisualCharge(targetRiseTiles);
+        var meterLevel = reboundMeterLevel(depthPixels, massPixels);
         if (!best || strength > best.strength) {
           best = {
             type: e.type,
             pixels: depthPixels,
+            meterLevel: meterLevel,
             strength: strength,
             rows: Math.ceil(depthPixels / TS),
             massRows: Math.ceil(massPixels / TS),
@@ -1775,6 +1824,7 @@
       if (stat) return stat;
       return {
         pixels: 0,
+        meterLevel: 0,
         strength: 0,
         rows: 0,
         massRows: 0,
@@ -1791,17 +1841,18 @@
 
     function embeddedDepthInfo(rect) {
       var mass = matterMassInfo(rect);
-      return { pixels: mass.pixels, strength: mass.strength, entity: mass.entity };
+      return { pixels: mass.pixels, meterLevel: mass.meterLevel, strength: mass.strength, entity: mass.entity };
     }
 
     function shouldRebound(rect) {
-      if (!bottomHalfOverlapsSolid(rect)) return { fire: false, stuck: false, rows: 0, strength: 0 };
+      if (!bottomHalfOverlapsSolid(rect)) return { fire: false, stuck: false, rows: 0, depth: 0, meterLevel: 0, strength: 0 };
       var mass = matterMassInfo(rect);
       return {
         fire: true,
         stuck: !!mass.stuck,
         rows: mass.rows,
         depth: mass.pixels,
+        meterLevel: mass.meterLevel,
         strength: mass.strength,
         targetRiseTiles: mass.targetRiseTiles,
         launchVelocity: mass.launchVelocity,
@@ -1823,6 +1874,7 @@
       player.permeateUntilClear = false;
       player.permeateStartFeetY = null;
       player.embeddedDepth = 0;
+      player.reboundMeterLevel = 0;
       player.reboundStrength = 0;
       player.reboundTargetRiseTiles = 0;
       player.reboundLaunchVelocity = 0;
@@ -1841,14 +1893,16 @@
       player.queuedPermeate = false;
       player.queuedPermeateSource = null;
       player.embeddedDepth = result && result.depth ? result.depth : 0;
+      player.reboundMeterLevel = result && result.meterLevel ? result.meterLevel : 0;
       player.reboundStrength = result && result.strength ? result.strength : 0.35;
       player.reboundTargetRiseTiles = result && result.targetRiseTiles ? result.targetRiseTiles : 0;
       player.reboundLaunchVelocity = result && result.launchVelocity ? result.launchVelocity : 0;
       player.reboundExitY = result && result.exitY !== undefined ? result.exitY : null;
-      shake = 5 + player.reboundStrength * 12;
-      spawnRipple(player.x + CONFIG.PLAYER_W / 2, player.y + CONFIG.PLAYER_H / 2, player.reboundStrength);
+      var visualCharge = clamp(player.reboundMeterLevel / CONFIG.REBOUND_TUNED_MAX_ROWS, 0, 1);
+      shake = 5 + visualCharge * 16;
+      spawnRipple(player.x + CONFIG.PLAYER_W / 2, player.y + CONFIG.PLAYER_H / 2, visualCharge);
       for (var i = 0; i < 22; i++) {
-        spawnMatterParticle(player.x + CONFIG.PLAYER_W / 2, player.y + CONFIG.PLAYER_H / 2, player.reboundStrength, true);
+        spawnMatterParticle(player.x + CONFIG.PLAYER_W / 2, player.y + CONFIG.PLAYER_H / 2, visualCharge, true);
       }
     }
 
@@ -1860,6 +1914,8 @@
         player.queuedPermeate = false;
         player.queuedPermeateSource = null;
         player.reboundSurfaced = false;
+        player.embeddedDepth = 0;
+        player.reboundMeterLevel = 0;
         return;
       }
       if (overlappingMatter(playerRect()).length > 0) {
@@ -1873,6 +1929,7 @@
       player.queuedPermeateSource = null;
       player.permeateStartFeetY = null;
       player.embeddedDepth = 0;
+      player.reboundMeterLevel = 0;
       player.reboundStrength = 0;
       player.reboundTargetRiseTiles = 0;
       player.reboundLaunchVelocity = 0;
@@ -1949,6 +2006,7 @@
       player.queuedPermeateSource = null;
       player.permeateStartFeetY = null;
       player.embeddedDepth = 0;
+      player.reboundMeterLevel = 0;
       player.reboundStrength = 0;
       player.reboundTargetRiseTiles = 0;
       player.reboundLaunchVelocity = 0;
@@ -2098,6 +2156,7 @@
         var mass = matterMassInfo(rect);
         var rebound = shouldRebound(rect);
         player.embeddedDepth = rebound.depth || (fullOverlap ? mass.pixels : 0);
+        player.reboundMeterLevel = rebound.meterLevel || (fullOverlap ? mass.meterLevel : 0);
         if (autoChainActive && rebound.fire) {
           triggerReboundOrStuck(rebound);
           if (player.state === "rebounding") {
@@ -2114,6 +2173,8 @@
           } else {
             player.state = "solid";
             player.permeateStartFeetY = null;
+            player.embeddedDepth = 0;
+            player.reboundMeterLevel = 0;
           }
         }
       }
@@ -2122,6 +2183,8 @@
         player.permeateUntilClear = false;
         player.state = "solid";
         player.permeateStartFeetY = null;
+        player.embeddedDepth = 0;
+        player.reboundMeterLevel = 0;
       }
 
       var moveInput = (keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0);
@@ -2151,7 +2214,7 @@
 
       var embedded = overlappingMatter(playerRect()).length > 0;
       if (player.state === "permeating" && embedded && Math.random() < 0.45) {
-        var chargeForParticle = clamp((player.embeddedDepth || 0) / (CONFIG.PLAYER_H + TS), 0, 1);
+        var chargeForParticle = clamp((player.reboundMeterLevel || 0) / CONFIG.REBOUND_TUNED_MAX_ROWS, 0, 1);
         spawnMatterParticle(
           player.x + CONFIG.PLAYER_W / 2 + (Math.random() - 0.5) * CONFIG.PLAYER_W,
           player.y + CONFIG.PLAYER_H / 2,
@@ -2186,6 +2249,7 @@
             player.vy = clamp(player.vy, -CONFIG.PERMEATE_MATTER_MAX_SPEED, CONFIG.PERMEATE_MATTER_MAX_SPEED);
           } else {
             player.embeddedDepth = 0;
+            player.reboundMeterLevel = 0;
             player.vy = Math.min(CONFIG.MAX_FALL_SPEED, player.vy + CONFIG.GRAVITY);
           }
         } else if (player.state === "rebounding") {
@@ -2252,6 +2316,8 @@
       if (rectsOverlap(playerRect(), goalRect)) {
         player.state = "won";
         player.won = true;
+        player.embeddedDepth = 0;
+        player.reboundMeterLevel = 0;
         spawnRipple(goalRect.x + goalRect.w / 2, goalRect.y + goalRect.h / 2, 1);
       }
 
@@ -2531,10 +2597,9 @@
       var alpha = player.state === "permeating" ? 0.62 : 1;
       var cx = player.x + CONFIG.PLAYER_W / 2;
       var cy = player.y + CONFIG.PLAYER_H / 2;
-      var charge = clamp((player.embeddedDepth || 0) / (CONFIG.PLAYER_H + TS), 0, 1);
-      var deepCharge = player.state === "rebounding" ?
-        clamp(((player.reboundStrength || 0) - 1) / (CONFIG.REBOUND_MAX_CHARGE - 1), 0, 1) :
-        clamp(((player.embeddedDepth || 0) - (CONFIG.PLAYER_H + TS)) / (TS * 2), 0, 1);
+      var meterLevel = clamp(player.reboundMeterLevel || 0, 0, CONFIG.REBOUND_TUNED_MAX_ROWS);
+      var charge = meterLevel / CONFIG.REBOUND_TUNED_MAX_ROWS;
+      var deepCharge = clamp((meterLevel - 2.5) / 2.5, 0, 1);
 
       if (player.state === "permeating" || player.state === "rebounding") {
         ctx.save();
@@ -2653,10 +2718,9 @@
     }
 
     function drawOverlay() {
-      var depth = clamp((player.embeddedDepth || 0) / (CONFIG.PLAYER_H + TS), 0, 1);
-      var deep = player.state === "rebounding" ?
-        clamp(((player.reboundStrength || 0) - 1) / (CONFIG.REBOUND_MAX_CHARGE - 1), 0, 1) :
-        clamp(((player.embeddedDepth || 0) - (CONFIG.PLAYER_H + TS)) / (TS * 2), 0, 1);
+      var meterLevel = clamp(player.reboundMeterLevel || 0, 0, CONFIG.REBOUND_TUNED_MAX_ROWS);
+      var depth = meterLevel / CONFIG.REBOUND_TUNED_MAX_ROWS;
+      var deep = clamp((meterLevel - 2.5) / 2.5, 0, 1);
       if (depth <= 0 && player.flashTimer <= 0) return;
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -2675,12 +2739,13 @@
         stuck: "#ff5cf4",
         won: "#d8b4ff"
       }[player.won ? "won" : player.state];
-      var charge = clamp((player.embeddedDepth || 0) / (CONFIG.PLAYER_H + TS), 0, 1);
+      var meterLevel = clamp(player.reboundMeterLevel || 0, 0, CONFIG.REBOUND_TUNED_MAX_ROWS);
+      var charge = meterLevel / CONFIG.REBOUND_TUNED_MAX_ROWS;
       var message = "solid state";
       if (player.state === "permeating") {
         message = player.permeateUntilClear ? "phasing through" : "release to rebound";
       } else if (player.state === "rebounding") {
-        message = player.reboundStrength > 1.2 ? "deep rebound!" : "up, up and away!";
+        message = player.reboundMeterLevel >= 2.5 ? "deep rebound!" : "up, up and away!";
       } else if (player.state === "stuck") {
         message = "stuck";
       } else if (player.won) {
@@ -2694,6 +2759,10 @@
         if (stateLabel.style) stateLabel.style.background = stateColor;
       }
       if (messageLabel) messageLabel.textContent = message;
+      if (pressureMeter) {
+        pressureMeter.setAttribute("aria-valuenow", meterLevel.toFixed(1));
+        pressureMeter.setAttribute("aria-valuetext", meterLevel.toFixed(1) + "/5");
+      }
       if (pressureFill && pressureFill.style) pressureFill.style.width = Math.round(charge * 100) + "%";
     }
 
@@ -2796,6 +2865,7 @@
       contiguousMassExtents: contiguousMassExtents,
       matterMassInfo: matterMassInfo,
       shouldRebound: shouldRebound,
+      reboundMeterLevel: reboundMeterLevel,
       moveAndCollide: moveAndCollide,
       probeGrounded: probeGrounded,
       placePlayerAtCell: placePlayerAtCell,

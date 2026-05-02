@@ -4,16 +4,37 @@ const html = fs.readFileSync("index.html", "utf8");
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 
 function makeGame() {
+  const elements = {};
+  function makeElement() {
+    return {
+      style: {},
+      attributes: {},
+      textContent: "",
+      setAttribute(name, value) {
+        this.attributes[name] = String(value);
+      },
+      getAttribute(name) {
+        return this.attributes[name];
+      },
+      getContext() {
+        return new Proxy({}, {
+          get: (target, prop) => {
+            if (prop === "createLinearGradient" || prop === "createRadialGradient") {
+              return function () {
+                return { addColorStop() {} };
+              };
+            }
+            return target[prop] || (target[prop] = function () {});
+          }
+        });
+      }
+    };
+  }
   global.window = { addEventListener() {}, gameInternals: null };
   global.document = {
-    getElementById() {
-      return {
-        getContext() {
-          return new Proxy({}, {
-            get: (target, prop) => target[prop] || (target[prop] = function () {})
-          });
-        }
-      };
+    getElementById(id) {
+      if (!elements[id]) elements[id] = makeElement();
+      return elements[id];
     }
   };
   global.performance = { now: () => 0 };
@@ -85,6 +106,7 @@ function setPlayer(g, x, y, state = "solid") {
   p.permeateUntilClear = false;
   p.permeateStartFeetY = state === "permeating" ? y + g.CONFIG.PLAYER_H : null;
   p.embeddedDepth = 0;
+  p.reboundMeterLevel = 0;
   p.reboundStrength = 0;
   p.reboundTargetRiseTiles = 0;
   p.reboundLaunchVelocity = 0;
@@ -1303,6 +1325,56 @@ function testPlayerLimitMeasurements() {
   }
 }
 
+function testReboundDepthMeterLevels() {
+  const g = makeGame();
+  const centerLevels = [0.5, 1.5, 2.5, 3.5, 4.5];
+  const bottomLevels = [1, 2, 3, 4, 5];
+
+  assertApprox(g.reboundMeterLevel(0, g.CONFIG.TILE_SIZE), 0, 0.001, "zero depth meter was not empty");
+
+  for (let rows = 1; rows <= 5; rows++) {
+    const fixture = buildMeasurementFixture(g, { topRow: 24, leftCol: 10, massRows: rows });
+    const centerFeet = fixture.topY + (fixture.bottomY - fixture.topY) / 2;
+    const bottomFeet = fixture.bottomY;
+
+    setPlayer(g, fixture.x, centerFeet - g.CONFIG.PLAYER_H, "permeating");
+    const center = g.shouldRebound(g.playerRect());
+    assert(center.fire === true, rows + "-row center meter did not start from a valid rebound");
+    assertApprox(center.meterLevel, centerLevels[rows - 1], 0.001, rows + "-row center meter level missed");
+
+    setPlayer(g, fixture.x, bottomFeet - g.CONFIG.PLAYER_H, "permeating");
+    const bottom = g.shouldRebound(g.playerRect());
+    assert(bottom.fire === true, rows + "-row bottom meter did not start from a valid rebound");
+    assertApprox(bottom.meterLevel, bottomLevels[rows - 1], 0.001, rows + "-row bottom meter level missed");
+  }
+}
+
+function testHudPressureBarUsesReboundDepthMeter() {
+  const g = makeGame();
+  const pressureFill = global.document.getElementById("pressureFill");
+  const pressureMeter = global.document.getElementById("pressureMeter");
+
+  setPlayer(g, cellX(g, 1), standY(g, g.ROWS - 1), "solid");
+  g.renderOnly();
+  assert(pressureFill.style.width === "0%", "solid HUD meter was not empty");
+  assert(pressureMeter.getAttribute("aria-valuetext") === "0.0/5", "solid HUD meter aria text was not empty");
+
+  const fixture = buildMeasurementFixture(g, { topRow: 24, leftCol: 10, massRows: 5 });
+  setPlayer(g, fixture.x, fixture.bottomY - g.CONFIG.PLAYER_H, "permeating");
+  g.keys.ShiftLeft = true;
+  step(g);
+  g.renderOnly();
+  assert(pressureFill.style.width === "100%", "5-row bottom HUD meter was not full");
+  assert(pressureMeter.getAttribute("aria-valuetext") === "5.0/5", "5-row bottom HUD meter aria text was not full");
+}
+
+function testHudPressureMeterHasFiveSegments() {
+  const meterMarkup = html.match(/<div id="pressureMeter"[\s\S]*?<\/div>/);
+  assert(!!meterMarkup, "HUD pressure meter markup was not found");
+  const segmentCount = (meterMarkup[0].match(/class="meterSegment"/g) || []).length;
+  assert(segmentCount === 5, "HUD pressure meter expected 5 segments, got " + segmentCount);
+}
+
 function paintRect(rows, c, r, cols, rowCount, ch) {
   for (let rr = r; rr < r + rowCount; rr++) {
     for (let cc = c; cc < c + cols; cc++) rows[rr][cc] = ch;
@@ -1628,6 +1700,9 @@ const tests = [
   ["short fall does not accidentally permeate through thin mass", testShortFallDoesNotAccidentallyPermeateThroughThinMass],
   ["high fall can permeate through thin mass", testHighFallCanPermeateThroughThinMass],
   ["very high fall can permeate through large mass", testVeryHighFallCanPermeateThroughLargeMass],
+  ["rebound depth meter levels", testReboundDepthMeterLevels],
+  ["HUD pressure bar uses rebound depth meter", testHudPressureBarUsesReboundDepthMeter],
+  ["HUD pressure meter has five segments", testHudPressureMeterHasFiveSegments],
   ["player limit measurements", testPlayerLimitMeasurements],
   ["entity chars normalize geometry", testEntityCharMarkersNormalizeGeometry],
   ["repeated entity chars create clusters", testRepeatedEntityCharCreatesMultipleClusters],

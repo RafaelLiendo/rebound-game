@@ -93,6 +93,12 @@ There is no build step. `index.html` can be opened directly in a browser.
   at the planned exit. Do not let Ctrl+Shift preserve the artificial surfacing
   speed as extra rebound height; keep smoke coverage comparing release and
   Ctrl+Shift rebound peaks, plus chain responsiveness.
+- The HUD rebound-depth meter is display-only. `reboundMeterLevel()` maps
+  lower-body depth and capped mass height to a readable `0.0` to `5.0` scale
+  for the meter and visual effects; it must not change rebound launch physics.
+  Keep the meter visually represented by five structural segments rather than
+  pixel-sized repeating backgrounds, so the displayed divisions stay aligned
+  with the five-tile maximum at any HUD scale.
 - Permeation pass-through is also target-based: short falls should be resisted
   by drag, center pull, and bottom brake, while falls that meet the tuned tile
   threshold should carry through. Keep max-speed entry through static matter
@@ -134,6 +140,8 @@ Add smoke coverage when changing:
 - player limit tuning, including normal jump height, terminal fall distance,
   rebound target heights, minimum pass-through fall heights, and max-speed
   pass-through thickness
+- HUD meter behavior or visual charge scaling, including rebound-depth meter
+  levels, five visible segments, ARIA value text, and full/empty fill states
 - level loading or goal completion
 - authored level reachability, especially terrain gaps, rebound mass heights,
   moving platform surfaces, player clearance, and goal shelf access
