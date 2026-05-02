@@ -70,11 +70,14 @@ There is no build step. `index.html` can be opened directly in a browser.
   the active level bounds.
 - If level switching changes, keep `window.gameInternals` useful for tests by
   exposing live getters for active level data, dimensions, and camera position.
-- Permeation resistance should stay momentum-sensitive: slow or accidental
-  sinks should be caught by viscous pull, while high-speed intentional dives can
-  carry through thin matter, and very high falls can carry through larger
-  masses. Prefer smooth formulas that fade resistance with downward momentum
-  over hard state branches for "dive mode."
+- Rebound tuning is intentionally target-based. `reboundTargetRiseTiles()`
+  maps lower-body depth and mass height to the measured jump/rebound table, and
+  the launch-speed helper converts that target into fixed-step motion. Prefer
+  extending this model over adding separate deep-bonus formulas.
+- Permeation pass-through is also target-based: short falls should be resisted
+  by drag, center pull, and bottom brake, while falls that meet the tuned tile
+  threshold should carry through. Keep max-speed entry through static matter
+  aligned with the player limit measurement tests.
 
 ## Gameplay Expectations
 
@@ -109,6 +112,9 @@ Add smoke coverage when changing:
 - rebound/stuck behavior
 - permeation momentum, including short-fall catch behavior and high-fall
   pass-through behavior
+- player limit tuning, including normal jump height, terminal fall distance,
+  rebound target heights, minimum pass-through fall heights, and max-speed
+  pass-through thickness
 - level loading or goal completion
 - camera tracking or active level dimensions
 - exposed `window.gameInternals` test hooks

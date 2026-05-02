@@ -340,19 +340,15 @@
       JUMP_BUFFER_FRAMES: 6,
       REBOUND_AIR_CONTROL: 0.5,
       REBOUND_STATE_DURATION: 0.4,
-      BUOYANCY_ACCEL: 1.2,
-      BUOYANCY_DEPTH_ACCEL: 0.8,
-      BUOYANCY_MIN_SPEED: 12,
-      BUOYANCY_MAX_SPEED: 18,
-      REBOUND_EMBED_SPEED: 16,
-      REBOUND_MAX_STRENGTH: 2.4,
-      DEEP_REBOUND_MIN_ROWS: 3,
-      DEEP_REBOUND_BONUS: 1.4,
+      REBOUND_SURFACE_SPEED: 16,
+      REBOUND_MAX_CHARGE: 2.4,
+      REBOUND_SHALLOW_MIN_FACTOR: 0.22,
       PERMEATE_DRAG: 0.22,
       PERMEATE_PULL_ACCEL: 0.9,
       PERMEATE_BOTTOM_BRAKE_ACCEL: 0.45,
       PERMEATE_MATTER_MAX_SPEED: 12.8,
-      PERMEATE_MIN_RESISTANCE: 0,
+      PERMEATE_TUNED_MAX_ROWS: 5,
+      PERMEATE_DIVE_MAX_TARGET_TILES: 5,
       STUCK_SEARCH_RADIUS: 6,
       STUCK_DURATION: 0.5,
       PLAYER_W: 24,
@@ -1530,11 +1526,13 @@
       var centerTarget = Math.pow(2, massRows - 1);
       var bottomTarget = Math.pow(2, massRows);
       if (feetDepth <= centerDepth) {
-        return centerTarget * clamp(feetDepth / Math.max(1, centerDepth), 0.22, 1);
+        return centerTarget * clamp(feetDepth / Math.max(1, centerDepth), CONFIG.REBOUND_SHALLOW_MIN_FACTOR, 1);
       }
       return centerTarget + (bottomTarget - centerTarget) *
         clamp((feetDepth - centerDepth) / Math.max(1, massPixels - centerDepth), 0, 1);
     }
+
+    var launchSpeedCache = {};
 
     function ballisticRisePixels(launchSpeed) {
       var vy = -launchSpeed;
@@ -1552,6 +1550,8 @@
     function launchSpeedForRiseTiles(riseTiles) {
       var targetPixels = Math.max(0, riseTiles) * TS;
       if (targetPixels <= 0) return 0;
+      var cacheKey = Math.round(targetPixels * 1000);
+      if (launchSpeedCache[cacheKey] !== undefined) return launchSpeedCache[cacheKey];
       var low = 0;
       var high = 64;
       while (ballisticRisePixels(high) < targetPixels) high *= 2;
@@ -1563,16 +1563,17 @@
           high = mid;
         }
       }
+      launchSpeedCache[cacheKey] = high;
       return high;
     }
 
-    function reboundStrengthFromTargetRise(targetRiseTiles) {
-      return clamp(targetRiseTiles / 8, 0.22, CONFIG.REBOUND_MAX_STRENGTH);
+    function reboundVisualCharge(targetRiseTiles) {
+      return clamp(targetRiseTiles / 8, CONFIG.REBOUND_SHALLOW_MIN_FACTOR, CONFIG.REBOUND_MAX_CHARGE);
     }
 
     function passThroughTargetFallTiles(massRows) {
-      if (massRows > 5) return Infinity;
-      return Math.min(Math.pow(2, massRows), 5);
+      if (massRows > CONFIG.PERMEATE_TUNED_MAX_ROWS) return Infinity;
+      return Math.min(Math.pow(2, massRows), CONFIG.PERMEATE_DIVE_MAX_TARGET_TILES);
     }
 
     function permeationBottomBrake(mass, rect) {
@@ -1596,7 +1597,7 @@
       var depthPixels = clamp(rect.y + rect.h - ext.topY, 0, Math.max(CONFIG.PLAYER_H + TS * 2, massPixels));
       var targetRiseTiles = reboundTargetRiseTiles(depthPixels, massPixels);
       var launchVelocity = launchSpeedForRiseTiles(targetRiseTiles - depthPixels / TS);
-      var strength = reboundStrengthFromTargetRise(targetRiseTiles);
+      var strength = reboundVisualCharge(targetRiseTiles);
       var rows = countSolidRowsAbove(rect);
       return {
         type: "tile",
@@ -1625,7 +1626,7 @@
         var depthPixels = clamp(rect.y + rect.h - e.y, 0, Math.max(CONFIG.PLAYER_H + TS * 2, massPixels));
         var targetRiseTiles = reboundTargetRiseTiles(depthPixels, massPixels);
         var launchVelocity = launchSpeedForRiseTiles(targetRiseTiles - depthPixels / TS);
-        var strength = reboundStrengthFromTargetRise(targetRiseTiles);
+        var strength = reboundVisualCharge(targetRiseTiles);
         if (!best || strength > best.strength) {
           best = {
             type: e.type,
@@ -1712,7 +1713,7 @@
 
     function beginRebound(result) {
       player.state = "rebounding";
-      player.vy = -CONFIG.REBOUND_EMBED_SPEED;
+      player.vy = -CONFIG.REBOUND_SURFACE_SPEED;
       player.reboundSurfaced = false;
       player.reboundAirborneTimer = CONFIG.REBOUND_STATE_DURATION;
       player.permeateUntilClear = false;
@@ -2047,10 +2048,9 @@
             var fallBeforeMatter = player.permeateStartFeetY === null ? 0 :
               Math.max(0, (pullMass.topY - player.permeateStartFeetY) / TS);
             var fallDive = isFinite(targetFallTiles) && fallBeforeMatter >= targetFallTiles;
-            var speedDive = massRows <= 5 && fallBeforeMatter < 0.001 &&
+            var speedDive = massRows <= CONFIG.PERMEATE_TUNED_MAX_ROWS && fallBeforeMatter < 0.001 &&
               player.vy >= CONFIG.MAX_FALL_SPEED - 0.001;
-            var diveFade = (fallDive || speedDive) ? 1 : 0;
-            var resistance = 1 - diveFade * (1 - CONFIG.PERMEATE_MIN_RESISTANCE);
+            var resistance = (fallDive || speedDive) ? 0 : 1;
             player.vy *= (1 - CONFIG.PERMEATE_DRAG * resistance);
             if (pullMass.centerY !== null) {
               var center = player.y + CONFIG.PLAYER_H / 2;
@@ -2069,7 +2069,7 @@
             // Rebound target height is measured from the release depth. Travel
             // through matter is direct, then surfacing applies the exact launch
             // velocity needed for the remaining open-air rise.
-            player.vy = -CONFIG.REBOUND_EMBED_SPEED;
+            player.vy = -CONFIG.REBOUND_SURFACE_SPEED;
           } else {
             if (!player.reboundSurfaced) {
               player.reboundSurfaced = true;
@@ -2402,7 +2402,7 @@
       var cy = player.y + CONFIG.PLAYER_H / 2;
       var charge = clamp((player.embeddedDepth || 0) / (CONFIG.PLAYER_H + TS), 0, 1);
       var deepCharge = player.state === "rebounding" ?
-        clamp(((player.reboundStrength || 0) - 1) / (CONFIG.REBOUND_MAX_STRENGTH - 1), 0, 1) :
+        clamp(((player.reboundStrength || 0) - 1) / (CONFIG.REBOUND_MAX_CHARGE - 1), 0, 1) :
         clamp(((player.embeddedDepth || 0) - (CONFIG.PLAYER_H + TS)) / (TS * 2), 0, 1);
 
       if (player.state === "permeating" || player.state === "rebounding") {
@@ -2524,7 +2524,7 @@
     function drawOverlay() {
       var depth = clamp((player.embeddedDepth || 0) / (CONFIG.PLAYER_H + TS), 0, 1);
       var deep = player.state === "rebounding" ?
-        clamp(((player.reboundStrength || 0) - 1) / (CONFIG.REBOUND_MAX_STRENGTH - 1), 0, 1) :
+        clamp(((player.reboundStrength || 0) - 1) / (CONFIG.REBOUND_MAX_CHARGE - 1), 0, 1) :
         clamp(((player.embeddedDepth || 0) - (CONFIG.PLAYER_H + TS)) / (TS * 2), 0, 1);
       if (depth <= 0 && player.flashTimer <= 0) return;
       ctx.save();
