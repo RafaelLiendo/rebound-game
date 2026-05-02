@@ -92,7 +92,7 @@ function testLoadLevelRecalculatesMap() {
   const g = makeGame();
   const ts = g.CONFIG.TILE_SIZE;
 
-  assert(g.LEVELS.length >= 2, "game does not expose multiple levels");
+  assert(g.LEVELS.length >= 5, "game does not expose the authored level set");
   assert(g.currentLevelIndex === 0, "game did not start on level 0");
   assert(g.tiles.length === g.LEVEL.length, "initial tiles do not match active level height");
 
@@ -104,6 +104,31 @@ function testLoadLevelRecalculatesMap() {
   assert(g.tiles.every((row) => row.length === g.LEVEL[0].length), "loaded level tile rows have inconsistent widths");
   assert(g.spawnCell.c === 1 && g.spawnCell.r === 43, "loaded level spawn was not parsed");
   assert(g.goalRect.x === 25 * ts && g.goalRect.y === 13 * ts, "loaded level goal was not parsed");
+}
+
+function testAuthoredLevelsHaveValidMarkersAndStarts() {
+  const g = makeGame();
+
+  g.LEVELS.forEach((level, index) => {
+    const width = level.map[0].length;
+    const joined = level.map.join("");
+    const spawnCount = (joined.match(/S/g) || []).length;
+    const goalCount = (joined.match(/G/g) || []).length;
+
+    assert(width === 30, "level " + (index + 1) + " is not 30 columns wide");
+    assert(level.map.length === 45, "level " + (index + 1) + " is not 45 rows tall");
+    assert(level.map.every((row) => row.length === width), "level " + (index + 1) + " has uneven rows");
+    assert(spawnCount === 1, "level " + (index + 1) + " must have exactly one spawn");
+    assert(goalCount === 1, "level " + (index + 1) + " must have exactly one goal");
+
+    g.loadLevel(index);
+
+    assert(g.currentLevelIndex === index, "level " + (index + 1) + " did not load");
+    assert(g.player.state === "solid", "level " + (index + 1) + " did not spawn solid");
+    assert(g.overlappingSolidTiles(g.playerRect()).length === 0, "level " + (index + 1) + " spawns inside terrain");
+    assert(g.player.grounded === true, "level " + (index + 1) + " spawn is not grounded");
+    assert(g.goalRect.y < g.spawnCell.y, "level " + (index + 1) + " goal is not above the spawn");
+  });
 }
 
 function testLoadLevelRejectsUnevenRows() {
@@ -212,6 +237,14 @@ function testAutoAssistClimbsTenTileStack() {
 
 function testManualQueueConsumesOnSurface() {
   const g = makeGame();
+
+  for (let r = 0; r < g.tiles.length; r++) {
+    for (let c = 0; c < g.tiles[r].length; c++) g.tiles[r][c] = false;
+  }
+  for (let r = 21; r <= 23; r++) {
+    for (let c = 19; c <= 21; c++) g.tiles[r][c] = true;
+  }
+
   setPlayer(g, cellX(g, 20), 22 * g.CONFIG.TILE_SIZE, "permeating");
 
   release(g, "ShiftLeft");
@@ -280,6 +313,7 @@ function testBlockedUpwardEscapeBecomesStuck() {
 
 const tests = [
   ["load level recalculates map", testLoadLevelRecalculatesMap],
+  ["authored levels have valid starts", testAuthoredLevelsHaveValidMarkersAndStarts],
   ["load level rejects uneven rows", testLoadLevelRejectsUnevenRows],
   ["reset restarts current level", testResetRestartsCurrentLevel],
   ["winning advances to next level", testWinningAdvancesToNextLevel],
