@@ -44,8 +44,11 @@ There is no build step. `index.html` can be opened directly in a browser.
 - Different levels may have different row and column counts. Within a single
   level, every map row must have the same number of columns; `parseLevel()`
   throws an error for uneven row widths.
+- Levels may be wider than the 960 px viewport. The camera tracks both
+  horizontal and vertical player movement through `updateCamera()`, clamping to
+  the active level bounds.
 - If level switching changes, keep `window.gameInternals` useful for tests by
-  exposing live getters for active level data.
+  exposing live getters for active level data, dimensions, and camera position.
 
 ## Gameplay Expectations
 
@@ -73,6 +76,7 @@ Add smoke coverage when changing:
 - collision or tile parsing
 - rebound/stuck behavior
 - level loading or goal completion
+- camera tracking or active level dimensions
 - exposed `window.gameInternals` test hooks
 
 ## Style
@@ -81,5 +85,5 @@ Add smoke coverage when changing:
 - Use ASCII unless an existing file clearly calls for otherwise.
 - Avoid broad refactors while tuning mechanics.
 - Keep HUD text short enough to fit the existing overlay.
-- When adding levels, preserve consistent row widths within each map, even if
-  the next level uses a different overall size.
+- When adding levels, preserve consistent row widths within each map. Wider
+  maps are encouraged when the route benefits from horizontal traversal.
