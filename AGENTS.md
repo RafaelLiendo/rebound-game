@@ -39,18 +39,26 @@ There is no build step. `index.html` can be opened directly in a browser.
   - `.` = empty space
   - `S` = player spawn
   - `G` = goal
+  - single ASCII letters = dynamic entity markers
+  - digits `1` to `9` = checkpoints
 - Multiple levels are defined in `LEVELS` with `defineLevel({ ... })`. Keep
   authored levels readable: use literal ASCII `map` rows as the terrain source
-  of truth, and put dynamic objects in nearby `entities` / `checkpoints`
-  arrays.
+  of truth. Put dynamic entity geometry directly in the map and keep entity
+  behavior settings in the nearby `entities` array.
 - Level entities should use named object fields rather than positional helper
   arguments:
-  - movers: `kind`, `name`, `at`, `size`, `role`, and `motion`
-  - asteroids: `kind`, `name`, `at`, `size`, and `timing`
-  - checkpoints: `name` and `at`
-- `defineLevel()` normalizes authored entity objects into the runtime shape
-  used by the simulation. Use `loadLevel(index)` rather than mutating map
-  globals directly.
+  - movers: `kind`, `char`, `name`, `role`, and `motion`
+  - asteroids: `kind`, `char`, `name`, and `timing`
+- The entity `char` is case-sensitive and must be a single ASCII letter other
+  than `S` or `G`. Each connected group of matching letters becomes one
+  rectangular runtime entity; separate groups using the same letter create
+  multiple entities with shared behavior.
+- Do not use entity `at` / `size` fields or a separate `checkpoints` property.
+  Checkpoint digits in the map are parsed in numeric order, and recovery always
+  uses the largest checkpoint reached.
+- `defineLevel()` normalizes authored map markers and entity objects into the
+  runtime shape used by the simulation. Use `loadLevel(index)` rather than
+  mutating map globals directly.
 - Different levels may have different row and column counts. Within a single
   level, every map row must have the same number of columns; `parseLevel()`
   throws an error for uneven row widths.
@@ -99,4 +107,5 @@ Add smoke coverage when changing:
 - When adding levels, preserve consistent row widths within each map. Wider
   maps are encouraged when the route benefits from horizontal traversal. Keep
   entity lists ordered roughly in route order so the level design is easy to
-  scan from code.
+  scan from code. Place entity letters and checkpoint digits where they belong
+  in the route, and keep same-letter entity clusters rectangular.

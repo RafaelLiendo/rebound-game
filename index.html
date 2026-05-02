@@ -372,31 +372,84 @@
       return map.join("").split(marker).length - 1;
     }
 
-    function isAsciiLetter(ch) {
+    function isEntityChar(ch) {
       return /^[A-Za-z]$/.test(ch);
     }
 
-    function isCheckpointDigit(ch) {
-      return /^[1-9]$/.test(ch);
+    function isCheckpointChar(ch) {
+      return /^[0-9]$/.test(ch);
     }
 
-    function assertEntityChar(levelName, label, ch) {
-      if (!ch || ch.length !== 1 || !isAsciiLetter(ch) || ch === "S" || ch === "G") {
-        throw new Error(levelName + " " + label + " must use a single ASCII letter char other than S or G.");
+    function cellKey(c, r) {
+      return c + "," + r;
+    }
+
+    function rectanglesFromCells(levelName, marker, cells) {
+      var remaining = {};
+      var rects = [];
+      cells.forEach(function (cell) {
+        remaining[cellKey(cell.c, cell.r)] = cell;
+      });
+
+      while (cells.length) {
+        var seed = null;
+        while (cells.length && !seed) {
+          var next = cells.pop();
+          if (remaining[cellKey(next.c, next.r)]) seed = next;
+        }
+        if (!seed) break;
+
+        var stack = [seed];
+        var cluster = [];
+        var minC = seed.c;
+        var maxC = seed.c;
+        var minR = seed.r;
+        var maxR = seed.r;
+        delete remaining[cellKey(seed.c, seed.r)];
+
+        while (stack.length) {
+          var cell = stack.pop();
+          cluster.push(cell);
+          minC = Math.min(minC, cell.c);
+          maxC = Math.max(maxC, cell.c);
+          minR = Math.min(minR, cell.r);
+          maxR = Math.max(maxR, cell.r);
+
+          [
+            { c: cell.c + 1, r: cell.r },
+            { c: cell.c - 1, r: cell.r },
+            { c: cell.c, r: cell.r + 1 },
+            { c: cell.c, r: cell.r - 1 }
+          ].forEach(function (neighbor) {
+            var key = cellKey(neighbor.c, neighbor.r);
+            if (!remaining[key]) return;
+            stack.push(remaining[key]);
+            delete remaining[key];
+          });
+        }
+
+        if (cluster.length !== (maxC - minC + 1) * (maxR - minR + 1)) {
+          throw new Error(levelName + " marker " + marker + " must form rectangles.");
+        }
+        rects.push({ c: minC, r: minR, w: maxC - minC + 1, h: maxR - minR + 1 });
       }
+
+      return rects.sort(function (a, b) {
+        return a.r === b.r ? a.c - b.c : a.r - b.r;
+      });
     }
 
-    function copyEntityBehavior(def, name, cluster) {
+    function normalizeEntity(def, rect, name) {
       var motion = def.motion || {};
       var timing = def.timing || {};
       var amplitude = motion.amplitude || {};
       var out = {
         type: def.kind,
         name: name,
-        c: cluster.c,
-        r: cluster.r,
-        w: cluster.cols,
-        h: cluster.rows,
+        c: rect.c,
+        r: rect.r,
+        w: rect.w,
+        h: rect.h,
         role: def.role || "platform"
       };
       if (def.kind === "mover") {
@@ -414,136 +467,6 @@
       return out;
     }
 
-    function findMarkerClusters(map, marker, width, height, levelName, label) {
-      var seen = [];
-      var clusters = [];
-      for (var sr = 0; sr < height; sr++) {
-        seen[sr] = [];
-      }
-
-      for (var r = 0; r < height; r++) {
-        for (var c = 0; c < width; c++) {
-          if (map[r][c] !== marker || seen[r][c]) continue;
-
-          var cells = [];
-          var stack = [{ c: c, r: r }];
-          var minC = c;
-          var maxC = c;
-          var minR = r;
-          var maxR = r;
-          seen[r][c] = true;
-
-          while (stack.length) {
-            var cell = stack.pop();
-            cells.push(cell);
-            minC = Math.min(minC, cell.c);
-            maxC = Math.max(maxC, cell.c);
-            minR = Math.min(minR, cell.r);
-            maxR = Math.max(maxR, cell.r);
-
-            var neighbors = [
-              { c: cell.c + 1, r: cell.r },
-              { c: cell.c - 1, r: cell.r },
-              { c: cell.c, r: cell.r + 1 },
-              { c: cell.c, r: cell.r - 1 }
-            ];
-            for (var i = 0; i < neighbors.length; i++) {
-              var next = neighbors[i];
-              if (next.c < 0 || next.c >= width || next.r < 0 || next.r >= height) continue;
-              if (seen[next.r][next.c] || map[next.r][next.c] !== marker) continue;
-              seen[next.r][next.c] = true;
-              stack.push(next);
-            }
-          }
-
-          for (var rr = minR; rr <= maxR; rr++) {
-            for (var cc = minC; cc <= maxC; cc++) {
-              if (map[rr][cc] !== marker) {
-                throw new Error(levelName + " " + label + " marker " + marker + " must form rectangles.");
-              }
-            }
-          }
-
-          clusters.push({
-            c: minC,
-            r: minR,
-            cols: maxC - minC + 1,
-            rows: maxR - minR + 1,
-            count: cells.length
-          });
-        }
-      }
-
-      return clusters.sort(function (a, b) {
-        return a.r === b.r ? a.c - b.c : a.r - b.r;
-      });
-    }
-
-    function scanAuthoredMarkers(def, width, height) {
-      var entityDefsByChar = {};
-      var markerCounts = {};
-      var checkpointsByOrder = {};
-      var entities = [];
-      var checkpoints = [];
-
-      if (def.checkpoints !== undefined) {
-        throw new Error(def.name + " checkpoints must be authored as digits in the map.");
-      }
-
-      (def.entities || []).forEach(function (entity, index) {
-        var label = "entity " + (entity.name || index + 1);
-        if (["mover", "asteroid"].indexOf(entity.kind) < 0) {
-          throw new Error(def.name + " " + label + " has unknown kind " + entity.kind + ".");
-        }
-        assertEntityChar(def.name, label, entity.char);
-        if (entityDefsByChar[entity.char]) {
-          throw new Error(def.name + " has multiple entities using char " + entity.char + ".");
-        }
-        if (entity.at !== undefined || entity.size !== undefined) {
-          throw new Error(def.name + " " + label + " must use char markers instead of at/size.");
-        }
-        entityDefsByChar[entity.char] = entity;
-      });
-
-      for (var r = 0; r < height; r++) {
-        for (var c = 0; c < width; c++) {
-          var ch = def.map[r][c];
-          if (ch === "0") throw new Error(def.name + " checkpoint digit 0 is invalid.");
-          if (isCheckpointDigit(ch)) {
-            var order = Number(ch);
-            if (checkpointsByOrder[order]) {
-              throw new Error(def.name + " has duplicate checkpoint " + ch + ".");
-            }
-            checkpointsByOrder[order] = { order: order, name: "checkpoint " + ch, c: c, r: r };
-          } else if (isAsciiLetter(ch) && ch !== "S" && ch !== "G") {
-            if (!entityDefsByChar[ch]) {
-              throw new Error(def.name + " map marker " + ch + " has no matching entity definition.");
-            }
-            markerCounts[ch] = (markerCounts[ch] || 0) + 1;
-          }
-        }
-      }
-
-      for (var entityChar in entityDefsByChar) {
-        if (!markerCounts[entityChar]) {
-          throw new Error(def.name + " entity char " + entityChar + " does not appear in the map.");
-        }
-        var entityDef = entityDefsByChar[entityChar];
-        var clusters = findMarkerClusters(def.map, entityChar, width, height, def.name, "entity " + (entityDef.name || entityChar));
-        for (var i = 0; i < clusters.length; i++) {
-          var name = entityDef.name || entityDef.kind;
-          if (clusters.length > 1) name += " " + (i + 1);
-          entities.push(copyEntityBehavior(entityDef, name, clusters[i]));
-        }
-      }
-
-      for (var checkpointOrder = 1; checkpointOrder <= 9; checkpointOrder++) {
-        if (checkpointsByOrder[checkpointOrder]) checkpoints.push(checkpointsByOrder[checkpointOrder]);
-      }
-
-      return { entities: entities, checkpoints: checkpoints };
-    }
-
     function validateLevelAuthoring(def) {
       if (!def || !def.name) throw new Error("Level must have a name.");
       if (!def.map || !def.map.length) throw new Error(def.name + " must have a map.");
@@ -557,9 +480,72 @@
       if (countMarker(def.map, "G") !== 1) throw new Error(def.name + " must have exactly one goal.");
     }
 
-    function defineLevel(def) {
+    function normalizeLevelAuthoring(def) {
       validateLevelAuthoring(def);
-      var markers = scanAuthoredMarkers(def, def.map[0].length, def.map.length);
+      if (def.checkpoints !== undefined) throw new Error(def.name + " checkpoints must be authored as digits in the map.");
+
+      var entityDefs = {};
+      var entityCells = {};
+      var checkpoints = [];
+      var checkpointsByOrder = {};
+      (def.entities || []).forEach(function (entity, index) {
+        var label = "entity " + (entity.name || index + 1);
+        if (["mover", "asteroid"].indexOf(entity.kind) < 0) {
+          throw new Error(def.name + " " + label + " has unknown kind " + entity.kind + ".");
+        }
+        if (!entity.char || entity.char.length !== 1 || !isEntityChar(entity.char) || entity.char === "S" || entity.char === "G") {
+          throw new Error(def.name + " " + label + " must use a single ASCII letter char other than S or G.");
+        }
+        if (entityDefs[entity.char]) {
+          throw new Error(def.name + " has multiple entities using char " + entity.char + ".");
+        }
+        if (entity.at !== undefined || entity.size !== undefined) {
+          throw new Error(def.name + " " + label + " must use char markers instead of at/size.");
+        }
+        entityDefs[entity.char] = entity;
+        entityCells[entity.char] = [];
+      });
+
+      for (var r = 0; r < def.map.length; r++) {
+        for (var c = 0; c < def.map[r].length; c++) {
+          var ch = def.map[r][c];
+          if (isCheckpointChar(ch)) {
+            if (ch === "0") throw new Error(def.name + " checkpoint digit 0 is invalid.");
+            var order = Number(ch);
+            if (checkpointsByOrder[order]) throw new Error(def.name + " has duplicate checkpoint " + ch + ".");
+            checkpointsByOrder[order] = { order: order, name: "checkpoint " + ch, c: c, r: r };
+          } else if (isEntityChar(ch) && ch !== "S" && ch !== "G") {
+            if (!entityCells[ch]) throw new Error(def.name + " map marker " + ch + " has no matching entity definition.");
+            entityCells[ch].push({ c: c, r: r });
+          }
+        }
+      }
+
+      var entities = [];
+      for (var ch in entityDefs) {
+        if (!entityCells[ch].length) {
+          throw new Error(def.name + " entity char " + ch + " does not appear in the map.");
+        }
+        var rects = rectanglesFromCells(def.name, ch, entityCells[ch]);
+        for (var i = 0; i < rects.length; i++) {
+          var entityDef = entityDefs[ch];
+          var name = entityDef.name || entityDef.kind;
+          if (rects.length > 1) name += " " + (i + 1);
+          entities.push(normalizeEntity(entityDef, rects[i], name));
+        }
+      }
+
+      for (var checkpointOrder = 1; checkpointOrder <= 9; checkpointOrder++) {
+        if (checkpointsByOrder[checkpointOrder]) {
+          checkpoints.push(checkpointsByOrder[checkpointOrder]);
+        }
+      }
+
+      return { entities: entities, checkpoints: checkpoints };
+    }
+
+    function defineLevel(def) {
+      var markers = normalizeLevelAuthoring(def);
       return {
         name: def.name,
         map: def.map.slice(),
