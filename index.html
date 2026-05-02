@@ -344,11 +344,13 @@
       BUOYANCY_DEPTH_ACCEL: 0.8,
       BUOYANCY_MIN_SPEED: 12,
       BUOYANCY_MAX_SPEED: 18,
-      REBOUND_MAX_STRENGTH: 1.35,
+      REBOUND_MAX_STRENGTH: 1.8,
       DEEP_REBOUND_MIN_ROWS: 3,
-      DEEP_REBOUND_BONUS: 0.35,
-      PERMEATE_DRAG: 0.08,
-      PERMEATE_PULL_ACCEL: 0.6,
+      DEEP_REBOUND_BONUS: 0.8,
+      PERMEATE_DRAG: 0.18,
+      PERMEATE_PULL_ACCEL: 0.9,
+      PERMEATE_BOTTOM_BRAKE_ACCEL: 1.1,
+      PERMEATE_MATTER_MAX_SPEED: 4.5,
       STUCK_SEARCH_RADIUS: 6,
       STUCK_DURATION: 0.5,
       PLAYER_W: 24,
@@ -1523,6 +1525,17 @@
       return clamp(strength, 0.22, CONFIG.REBOUND_MAX_STRENGTH);
     }
 
+    function permeationBottomBrake(mass, rect) {
+      if (!mass || mass.botY === undefined) return 0;
+      var feetDepth = rect.y + rect.h - mass.topY;
+      var fullChargeDepth = CONFIG.PLAYER_H + TS;
+      var deepStart = Math.min(fullChargeDepth, mass.botY - mass.topY);
+      var deepSpan = Math.max(TS, mass.botY - mass.topY - deepStart);
+      var bottomProgress = clamp((feetDepth - deepStart) / deepSpan, 0, 1);
+      var overExit = clamp((feetDepth - (mass.botY - mass.topY)) / CONFIG.PLAYER_H, 0, 1);
+      return CONFIG.PERMEATE_BOTTOM_BRAKE_ACCEL * Math.max(bottomProgress, overExit);
+    }
+
     function staticMassInfo(rect) {
       var ext = contiguousMassExtents(rect);
       if (!ext || overlappingSolidTiles(bottomHalfRect(rect)).length === 0) {
@@ -1937,8 +1950,9 @@
               if (Math.abs(pullMass.centerY - center) > 2) {
                 player.vy += Math.sign(pullMass.centerY - center) * CONFIG.PERMEATE_PULL_ACCEL;
               }
+              player.vy -= permeationBottomBrake(pullMass, playerRect());
             }
-            player.vy = clamp(player.vy, -CONFIG.MAX_FALL_SPEED, CONFIG.MAX_FALL_SPEED);
+            player.vy = clamp(player.vy, -CONFIG.PERMEATE_MATTER_MAX_SPEED, CONFIG.PERMEATE_MATTER_MAX_SPEED);
           } else {
             player.embeddedDepth = 0;
             player.vy = Math.min(CONFIG.MAX_FALL_SPEED, player.vy + CONFIG.GRAVITY);

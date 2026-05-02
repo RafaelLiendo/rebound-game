@@ -390,8 +390,8 @@ function testPermeationCenterPullUsesTunedAccel() {
   setPlayer(g, cellX(g, 11), row * g.CONFIG.TILE_SIZE - 20, "permeating");
   step(g);
 
-  assertNear(g.CONFIG.PERMEATE_PULL_ACCEL, 0.6, "permeate center pull was not doubled");
-  assertNear(g.player.vy, 0.6, "permeate center pull did not apply the tuned acceleration");
+  assertNear(g.CONFIG.PERMEATE_PULL_ACCEL, 0.9, "permeate center pull was not retuned strongly enough");
+  assertNear(g.player.vy, 0.9, "permeate center pull did not apply the tuned acceleration");
 }
 
 function testThinMassKeepsExistingReboundCurve() {
@@ -440,6 +440,29 @@ function testDeepStaticMassRewardsBottomDive() {
   assertNear(mid.strength, 1, "old full-charge depth should not receive deep bonus yet");
   assert(deep.strength > mid.strength, "bottom dive in tall static mass did not strengthen rebound");
   assertNear(deep.strength, g.CONFIG.REBOUND_MAX_STRENGTH, "bottom dive did not reach tuned max strength");
+}
+
+function testPermeationBottomBrakeResistsDeepSinking() {
+  const g = makeGame();
+
+  g.entities.length = 0;
+  for (let r = 0; r < g.tiles.length; r++) {
+    for (let c = 0; c < g.tiles[r].length; c++) g.tiles[r][c] = false;
+  }
+
+  const topRow = 20;
+  const bottomRow = 24;
+  for (let r = topRow; r <= bottomRow; r++) {
+    for (let c = 10; c <= 12; c++) g.tiles[r][c] = true;
+  }
+
+  const bottomY = (bottomRow + 1) * g.CONFIG.TILE_SIZE;
+  setPlayer(g, cellX(g, 11), bottomY - g.CONFIG.PLAYER_H - 4, "permeating");
+  g.player.vy = 8;
+  step(g);
+
+  assert(g.player.vy < 8, "deep permeation did not brake downward speed");
+  assert(g.player.vy <= g.CONFIG.PERMEATE_MATTER_MAX_SPEED, "deep permeation exceeded matter speed cap");
 }
 
 function paintRect(rows, c, r, cols, rowCount, ch) {
@@ -758,6 +781,7 @@ const tests = [
   ["permeation center pull uses tuned accel", testPermeationCenterPullUsesTunedAccel],
   ["thin mass keeps existing rebound curve", testThinMassKeepsExistingReboundCurve],
   ["deep static mass rewards bottom dive", testDeepStaticMassRewardsBottomDive],
+  ["permeation bottom brake resists deep sinking", testPermeationBottomBrakeResistsDeepSinking],
   ["entity chars normalize geometry", testEntityCharMarkersNormalizeGeometry],
   ["repeated entity chars create clusters", testRepeatedEntityCharCreatesMultipleClusters],
   ["irregular entity markers are rejected", testIrregularEntityMarkerIsRejected],
