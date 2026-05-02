@@ -390,8 +390,8 @@ function testPermeationCenterPullUsesTunedAccel() {
   setPlayer(g, cellX(g, 11), row * g.CONFIG.TILE_SIZE - 20, "permeating");
   step(g);
 
-  assertNear(g.CONFIG.PERMEATE_PULL_ACCEL, 0.45, "permeate center pull was not dialed back");
-  assertNear(g.player.vy, 0.45, "permeate center pull did not apply the tuned acceleration");
+  assertNear(g.CONFIG.PERMEATE_PULL_ACCEL, 0.34, "permeate center pull was not dialed back");
+  assertNear(g.player.vy, 0.34, "permeate center pull did not apply the tuned acceleration");
 }
 
 function testThinMassKeepsExistingReboundCurve() {
@@ -487,7 +487,94 @@ function testPermeationBottomBrakeResistsDeepSinking() {
   step(g);
 
   assert(g.player.vy < 8, "deep permeation did not brake downward speed");
-  assert(g.player.vy <= g.CONFIG.PERMEATE_MATTER_MAX_SPEED, "deep permeation exceeded matter speed cap");
+  assert(g.player.vy <= g.CONFIG.PERMEATE_DIVE_MAX_SPEED, "deep permeation exceeded dive speed cap");
+}
+
+function testShortFallDoesNotAccidentallyPermeateThroughThinMass() {
+  const g = makeGame();
+
+  g.entities.length = 0;
+  for (let r = 0; r < g.tiles.length; r++) {
+    for (let c = 0; c < g.tiles[r].length; c++) g.tiles[r][c] = false;
+  }
+
+  const row = 24;
+  for (let c = 10; c <= 12; c++) g.tiles[row][c] = true;
+
+  const topY = row * g.CONFIG.TILE_SIZE;
+  const bottomY = (row + 1) * g.CONFIG.TILE_SIZE;
+  setPlayer(g, cellX(g, 11), topY - 16 - g.CONFIG.PLAYER_H, "permeating");
+  g.keys.ShiftLeft = true;
+
+  let passedThrough = false;
+  for (let i = 0; i < 120; i++) {
+    step(g);
+    if (g.player.y > bottomY && g.overlappingSolidTiles(g.playerRect()).length === 0) {
+      passedThrough = true;
+      break;
+    }
+  }
+
+  assert(!passedThrough, "short fall accidentally permeated through a thin mass");
+}
+
+function testHighFallCanPermeateThroughThinMass() {
+  const g = makeGame();
+
+  g.entities.length = 0;
+  for (let r = 0; r < g.tiles.length; r++) {
+    for (let c = 0; c < g.tiles[r].length; c++) g.tiles[r][c] = false;
+  }
+
+  const row = 24;
+  for (let c = 10; c <= 12; c++) g.tiles[row][c] = true;
+
+  const topY = row * g.CONFIG.TILE_SIZE;
+  const bottomY = (row + 1) * g.CONFIG.TILE_SIZE;
+  setPlayer(g, cellX(g, 11), topY - 160 - g.CONFIG.PLAYER_H, "permeating");
+  g.keys.ShiftLeft = true;
+
+  let passedThrough = false;
+  for (let i = 0; i < 140; i++) {
+    step(g);
+    if (g.player.y > bottomY && g.overlappingSolidTiles(g.playerRect()).length === 0) {
+      passedThrough = true;
+      break;
+    }
+  }
+
+  assert(passedThrough, "high fall did not permeate through a thin mass");
+}
+
+function testVeryHighFallCanPermeateThroughLargeMass() {
+  const g = makeGame();
+
+  g.entities.length = 0;
+  for (let r = 0; r < g.tiles.length; r++) {
+    for (let c = 0; c < g.tiles[r].length; c++) g.tiles[r][c] = false;
+  }
+
+  const topRow = 24;
+  const rows = 5;
+  for (let r = topRow; r < topRow + rows; r++) {
+    for (let c = 10; c <= 12; c++) g.tiles[r][c] = true;
+  }
+
+  const topY = topRow * g.CONFIG.TILE_SIZE;
+  const bottomY = (topRow + rows) * g.CONFIG.TILE_SIZE;
+  setPlayer(g, cellX(g, 11), topY - 512 - g.CONFIG.PLAYER_H, "permeating");
+  g.keys.ShiftLeft = true;
+
+  let passedThrough = false;
+  for (let i = 0; i < 220; i++) {
+    step(g);
+    if (g.player.y > bottomY && g.overlappingSolidTiles(g.playerRect()).length === 0) {
+      passedThrough = true;
+      break;
+    }
+  }
+
+  assert(passedThrough, "very high fall did not permeate through a large mass");
 }
 
 function paintRect(rows, c, r, cols, rowCount, ch) {
@@ -808,6 +895,9 @@ const tests = [
   ["deep static mass rewards bottom dive", testDeepStaticMassRewardsBottomDive],
   ["first level deep rebound can reach goal height", testFirstLevelDeepReboundCanReachGoalHeight],
   ["permeation bottom brake resists deep sinking", testPermeationBottomBrakeResistsDeepSinking],
+  ["short fall does not accidentally permeate through thin mass", testShortFallDoesNotAccidentallyPermeateThroughThinMass],
+  ["high fall can permeate through thin mass", testHighFallCanPermeateThroughThinMass],
+  ["very high fall can permeate through large mass", testVeryHighFallCanPermeateThroughLargeMass],
   ["entity chars normalize geometry", testEntityCharMarkersNormalizeGeometry],
   ["repeated entity chars create clusters", testRepeatedEntityCharCreatesMultipleClusters],
   ["irregular entity markers are rejected", testIrregularEntityMarkerIsRejected],
