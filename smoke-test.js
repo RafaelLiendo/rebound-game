@@ -58,6 +58,8 @@ function setPlayer(g, x, y, state = "solid") {
   p.queuedPermeate = false;
   p.queuedPermeateSource = null;
   p.permeateUntilClear = false;
+  p.embeddedDepth = 0;
+  p.reboundStrength = 0;
   p.stuckTimer = 0;
   p.flashTimer = 0;
   g.probeGrounded();
@@ -80,6 +82,212 @@ function assertNear(actual, expected, msg) {
   if (Math.abs(actual - expected) > 0.001) {
     throw new Error(msg + " expected " + expected + ", got " + actual);
   }
+}
+
+function feetY(g) {
+  return g.player.y + g.CONFIG.PLAYER_H;
+}
+
+function tilesFromPixels(g, pixels) {
+  return pixels / g.CONFIG.TILE_SIZE;
+}
+
+function clearMeasurementWorld(g) {
+  g.entities.length = 0;
+  for (let r = 0; r < g.tiles.length; r++) {
+    for (let c = 0; c < g.tiles[r].length; c++) g.tiles[r][c] = false;
+  }
+}
+
+function paintTileBlock(g, topRow, leftCol, rowCount, colCount = 3) {
+  for (let r = topRow; r < topRow + rowCount; r++) {
+    for (let c = leftCol; c < leftCol + colCount; c++) g.tiles[r][c] = true;
+  }
+}
+
+function buildMeasurementFixture(g, options = {}) {
+  clearMeasurementWorld(g);
+  const topRow = options.topRow === undefined ? 24 : options.topRow;
+  const leftCol = options.leftCol === undefined ? 10 : options.leftCol;
+  const cols = options.cols === undefined ? 3 : options.cols;
+  const massRows = options.massRows || 0;
+  if (massRows > 0) paintTileBlock(g, topRow, leftCol, massRows, cols);
+  if (options.floorRow !== undefined) {
+    for (let c = 0; c < g.tiles[options.floorRow].length; c++) g.tiles[options.floorRow][c] = true;
+  }
+  return {
+    topRow,
+    leftCol,
+    cols,
+    massRows,
+    topY: topRow * g.CONFIG.TILE_SIZE,
+    bottomY: (topRow + massRows) * g.CONFIG.TILE_SIZE,
+    x: cellX(g, leftCol + Math.floor(cols / 2))
+  };
+}
+
+function formatTiles(value) {
+  return value.toFixed(2);
+}
+
+function measurePeakFeetRise(g, setup, maxFrames = 360) {
+  const startFeet = setup();
+  let peakFeet = startFeet;
+  for (let i = 0; i < maxFrames; i++) {
+    step(g);
+    peakFeet = Math.min(peakFeet, feetY(g));
+  }
+  return tilesFromPixels(g, startFeet - peakFeet);
+}
+
+function measureNormalJumpPeak(g) {
+  const fixture = buildMeasurementFixture(g, { floorRow: 32, leftCol: 10 });
+  return measurePeakFeetRise(g, () => {
+    setPlayer(g, fixture.x, standY(g, 32), "solid");
+    assert(g.player.grounded === true, "normal jump measurement did not start grounded");
+    press(g, "Space");
+    return feetY(g);
+  }, 180);
+}
+
+function measureReboundPeak(g, massRows, releasePoint) {
+  const fixture = buildMeasurementFixture(g, { topRow: 24, leftCol: 10, massRows });
+  const releaseFeet = releasePoint === "center" ?
+    fixture.topY + (fixture.bottomY - fixture.topY) / 2 :
+    fixture.bottomY;
+
+  const peak = measurePeakFeetRise(g, () => {
+    setPlayer(g, fixture.x, releaseFeet - g.CONFIG.PLAYER_H, "permeating");
+    release(g, "ShiftLeft");
+    return releaseFeet;
+  }, 360);
+
+  assert(g.player.state !== "stuck", "rebound measurement became stuck for " + massRows + " rows at " + releasePoint);
+  return peak;
+}
+
+function simulatePassThrough(g, massRows, fallTiles, maxFrames = 360) {
+  const fixture = buildMeasurementFixture(g, { topRow: 24, leftCol: 10, massRows });
+  setPlayer(
+    g,
+    fixture.x,
+    fixture.topY - fallTiles * g.CONFIG.TILE_SIZE - g.CONFIG.PLAYER_H,
+    "permeating"
+  );
+  g.keys.ShiftLeft = true;
+
+  for (let i = 0; i < maxFrames; i++) {
+    step(g);
+    if (g.player.y > fixture.bottomY && g.overlappingSolidTiles(g.playerRect()).length === 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function findMinimumFallTiles(g, massRows) {
+  const precision = 1 / 32;
+  let low = 0;
+  let high = 32;
+  assert(simulatePassThrough(g, massRows, high), "fall-through threshold for " + massRows + " rows exceeded " + high + " tiles");
+
+  while (high - low > precision) {
+    const mid = (low + high) / 2;
+    if (simulatePassThrough(g, massRows, mid)) {
+      high = mid;
+    } else {
+      low = mid;
+    }
+  }
+  return high;
+}
+
+function measureFreeFallToTerminal(g) {
+  buildMeasurementFixture(g);
+  setPlayer(g, cellX(g, 10), -g.CONFIG.PLAYER_H, "solid");
+  const startFeet = feetY(g);
+
+  for (let i = 0; i < 240; i++) {
+    step(g);
+    if (g.player.vy >= g.CONFIG.MAX_FALL_SPEED) {
+      assertNear(g.player.vy, g.CONFIG.MAX_FALL_SPEED, "free fall did not clamp exactly to max fall speed");
+      return tilesFromPixels(g, feetY(g) - startFeet);
+    }
+  }
+
+  throw new Error("free fall never reached max fall speed");
+}
+
+function simulateTerminalVelocityPassThrough(g, massRows, maxFrames = 420) {
+  const fixture = buildMeasurementFixture(g, { topRow: 2, leftCol: 10, massRows });
+  setPlayer(g, fixture.x, fixture.topY - g.CONFIG.PLAYER_H, "permeating");
+  g.player.vy = g.CONFIG.MAX_FALL_SPEED;
+  g.keys.ShiftLeft = true;
+
+  for (let i = 0; i < maxFrames; i++) {
+    step(g);
+    if (g.player.y > fixture.bottomY && g.overlappingSolidTiles(g.playerRect()).length === 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function findMaxTerminalVelocityPassThroughRows(g) {
+  const capRows = 40;
+  assert(!simulateTerminalVelocityPassThrough(g, capRows), "terminal velocity pass-through exceeded " + capRows + " tile rows");
+
+  let low = 0;
+  let high = capRows;
+  while (high - low > 1) {
+    const mid = Math.floor((low + high) / 2);
+    if (simulateTerminalVelocityPassThrough(g, mid)) {
+      low = mid;
+    } else {
+      high = mid;
+    }
+  }
+  return low;
+}
+
+function measureChainPeak(g, stackCount) {
+  clearMeasurementWorld(g);
+  const rows = [];
+  for (let i = 0; i < stackCount; i++) rows.push(35 - i * 2);
+  for (const row of rows) paintTileBlock(g, row, 14, 1, 3);
+
+  const startFeet = rows[0] * g.CONFIG.TILE_SIZE;
+  setPlayer(g, cellX(g, 15), standY(g, rows[0]), "solid");
+  press(g, "ShiftLeft");
+
+  const touchedRows = new Set();
+  let firstSlabReady = false;
+  for (let i = 0; i < 120; i++) {
+    step(g);
+    for (const t of g.overlappingSolidTiles(g.playerRect())) touchedRows.add(t.r);
+    if (touchedRows.has(rows[0]) && g.shouldRebound(g.playerRect()).fire) {
+      firstSlabReady = true;
+      break;
+    }
+  }
+  assert(firstSlabReady, "chain measurement for " + stackCount + " slabs never reached a valid first-slab rebound; touched " + Array.from(touchedRows).join(","));
+  press(g, "ControlLeft");
+
+  let peakFeet = startFeet;
+  for (let i = 0; i < 900; i++) {
+    step(g);
+    peakFeet = Math.min(peakFeet, feetY(g));
+    for (const t of g.overlappingSolidTiles(g.playerRect())) touchedRows.add(t.r);
+    if (g.player.y < rows[rows.length - 1] * g.CONFIG.TILE_SIZE - g.CONFIG.PLAYER_H) break;
+  }
+
+  const missedRows = rows.filter((row) => !touchedRows.has(row));
+  assert(missedRows.length === 0, "chain measurement skipped stack rows: " + missedRows.join(", "));
+  return tilesFromPixels(g, startFeet - peakFeet);
+}
+
+function oneTileGapChainImpossible(g, stackCount) {
+  return stackCount > 1 && g.CONFIG.PLAYER_H > g.CONFIG.TILE_SIZE;
 }
 
 function completeCurrentLevel(g) {
@@ -577,6 +785,53 @@ function testVeryHighFallCanPermeateThroughLargeMass() {
   assert(passedThrough, "very high fall did not permeate through a large mass");
 }
 
+function testPlayerLimitMeasurements() {
+  const g = makeGame();
+  const centerRebounds = [];
+  const bottomRebounds = [];
+  const minimumFalls = [];
+  const chainPeaks = [];
+
+  const normalJump = measureNormalJumpPeak(g);
+  const terminalFall = measureFreeFallToTerminal(g);
+  const terminalRows = findMaxTerminalVelocityPassThroughRows(g);
+
+  for (let rows = 1; rows <= 5; rows++) {
+    centerRebounds.push(measureReboundPeak(g, rows, "center"));
+    bottomRebounds.push(measureReboundPeak(g, rows, "bottom"));
+    minimumFalls.push(findMinimumFallTiles(g, rows));
+    chainPeaks.push(oneTileGapChainImpossible(g, rows) ? null : measureChainPeak(g, rows));
+  }
+
+  for (let i = 0; i < 5; i++) {
+    assert(bottomRebounds[i] + 0.001 >= centerRebounds[i], "bottom rebound was lower than center rebound for " + (i + 1) + " tile mass");
+    if (i > 0) {
+      assert(bottomRebounds[i] + 0.001 >= bottomRebounds[i - 1], "deeper bottom rebound lost height at " + (i + 1) + " tile mass");
+      assert(minimumFalls[i] + 0.001 >= minimumFalls[i - 1], "minimum pass-through fall dropped at " + (i + 1) + " tile mass");
+      assert(chainPeaks[i] === null, "one-tile-gap chain unexpectedly produced a meaningful " + (i + 1) + "-slab measurement");
+    }
+  }
+  assert(chainPeaks[0] !== null && chainPeaks[0] > 0, "single-slab chain measurement did not rise");
+  assert(normalJump > 0, "normal jump measurement did not rise");
+  assert(terminalFall > 0, "terminal fall measurement did not fall");
+  assert(terminalRows > 0, "terminal-speed pass-through could not clear even one tile row");
+
+  console.log("PLAYER LIMITS");
+  console.log("  normal jump peak: " + formatTiles(normalJump) + " tiles");
+  console.log("  free fall to max speed: " + formatTiles(terminalFall) + " tiles");
+  console.log("  max-speed pass-through: " + terminalRows + " tile rows");
+  console.log("  rows | center rebound | bottom rebound | min fall through | chain peak");
+  for (let i = 0; i < 5; i++) {
+    console.log(
+      "  " + (i + 1) +
+      "    | " + formatTiles(centerRebounds[i]) +
+      "           | " + formatTiles(bottomRebounds[i]) +
+      "          | " + formatTiles(minimumFalls[i]) +
+      "             | " + (chainPeaks[i] === null ? "impossible (32px gap < 40px player)" : formatTiles(chainPeaks[i]))
+    );
+  }
+}
+
 function paintRect(rows, c, r, cols, rowCount, ch) {
   for (let rr = r; rr < r + rowCount; rr++) {
     for (let cc = c; cc < c + cols; cc++) rows[rr][cc] = ch;
@@ -898,6 +1153,7 @@ const tests = [
   ["short fall does not accidentally permeate through thin mass", testShortFallDoesNotAccidentallyPermeateThroughThinMass],
   ["high fall can permeate through thin mass", testHighFallCanPermeateThroughThinMass],
   ["very high fall can permeate through large mass", testVeryHighFallCanPermeateThroughLargeMass],
+  ["player limit measurements", testPlayerLimitMeasurements],
   ["entity chars normalize geometry", testEntityCharMarkersNormalizeGeometry],
   ["repeated entity chars create clusters", testRepeatedEntityCharCreatesMultipleClusters],
   ["irregular entity markers are rejected", testIrregularEntityMarkerIsRejected],
