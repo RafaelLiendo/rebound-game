@@ -344,8 +344,11 @@
       BUOYANCY_DEPTH_ACCEL: 0.8,
       BUOYANCY_MIN_SPEED: 12,
       BUOYANCY_MAX_SPEED: 18,
+      REBOUND_MAX_STRENGTH: 1.35,
+      DEEP_REBOUND_MIN_ROWS: 3,
+      DEEP_REBOUND_BONUS: 0.35,
       PERMEATE_DRAG: 0.08,
-      PERMEATE_PULL_ACCEL: 0.3,
+      PERMEATE_PULL_ACCEL: 0.6,
       STUCK_SEARCH_RADIUS: 6,
       STUCK_DURATION: 0.5,
       PLAYER_W: 24,
@@ -1508,22 +1511,37 @@
       return count;
     }
 
+    function reboundStrengthFromDepth(depthPixels, massPixels) {
+      var fullChargeDepth = CONFIG.PLAYER_H + TS;
+      var strength = clamp(depthPixels / fullChargeDepth, 0.22, 1);
+      var massRows = Math.ceil(massPixels / TS);
+      if (massRows >= CONFIG.DEEP_REBOUND_MIN_ROWS && massPixels > fullChargeDepth) {
+        var feetDepth = clamp(depthPixels, 0, massPixels);
+        var bottomProgress = clamp((feetDepth - fullChargeDepth) / (massPixels - fullChargeDepth), 0, 1);
+        strength += CONFIG.DEEP_REBOUND_BONUS * bottomProgress;
+      }
+      return clamp(strength, 0.22, CONFIG.REBOUND_MAX_STRENGTH);
+    }
+
     function staticMassInfo(rect) {
       var ext = contiguousMassExtents(rect);
       if (!ext || overlappingSolidTiles(bottomHalfRect(rect)).length === 0) {
         return null;
       }
 
-      var depthPixels = clamp(rect.y + rect.h - ext.topY, 0, CONFIG.PLAYER_H + TS * 2);
-      var strength = clamp(depthPixels / (CONFIG.PLAYER_H + TS), 0.22, 1);
+      var massPixels = ext.botY - ext.topY;
+      var depthPixels = clamp(rect.y + rect.h - ext.topY, 0, Math.max(CONFIG.PLAYER_H + TS * 2, massPixels));
+      var strength = reboundStrengthFromDepth(depthPixels, massPixels);
       var rows = countSolidRowsAbove(rect);
       return {
         type: "tile",
         pixels: depthPixels,
         strength: strength,
         rows: rows,
+        massRows: ext.botRow - ext.topRow + 1,
         centerY: ext.centerY,
         topY: ext.topY,
+        botY: ext.botY,
         stuck: rows > CONFIG.STUCK_SEARCH_RADIUS,
         entity: null
       };
@@ -1535,16 +1553,19 @@
       for (var i = 0; i < entities.length; i++) {
         var e = entities[i];
         if (!e.solid || !rectsOverlap(bottom, entityRect(e))) continue;
-        var depthPixels = clamp(rect.y + rect.h - e.y, 0, CONFIG.PLAYER_H + TS * 2);
-        var strength = clamp(depthPixels / (CONFIG.PLAYER_H + TS), 0.22, 1);
+        var massPixels = e.h;
+        var depthPixels = clamp(rect.y + rect.h - e.y, 0, Math.max(CONFIG.PLAYER_H + TS * 2, massPixels));
+        var strength = reboundStrengthFromDepth(depthPixels, massPixels);
         if (!best || strength > best.strength) {
           best = {
             type: e.type,
             pixels: depthPixels,
             strength: strength,
             rows: Math.ceil(depthPixels / TS),
+            massRows: Math.ceil(massPixels / TS),
             centerY: e.y + e.h / 2,
             topY: e.y,
+            botY: e.y + e.h,
             entity: e,
             stuck: (rect.y - e.y) > CONFIG.STUCK_SEARCH_RADIUS * TS
           };
@@ -1927,7 +1948,7 @@
             // Buoyancy is accumulated while still inside the mass. Collision is
             // intentionally disabled in the buoyant phase below, otherwise every
             // interior tile row would cancel the ascent before the player surfaces.
-            var strength = clamp(player.reboundStrength || 0.35, 0.22, 1);
+            var strength = clamp(player.reboundStrength || 0.35, 0.22, CONFIG.REBOUND_MAX_STRENGTH);
             var accelBoost = CONFIG.BUOYANCY_ACCEL + CONFIG.BUOYANCY_DEPTH_ACCEL * strength;
             var maxRise = CONFIG.BUOYANCY_MIN_SPEED +
               (CONFIG.BUOYANCY_MAX_SPEED - CONFIG.BUOYANCY_MIN_SPEED) * strength;

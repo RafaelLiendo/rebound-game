@@ -376,6 +376,72 @@ function testBlockedUpwardEscapeBecomesStuck() {
   assert(g.overlappingSolidTiles(g.playerRect()).length === 0, "stuck recovery left player inside terrain");
 }
 
+function testPermeationCenterPullUsesTunedAccel() {
+  const g = makeGame();
+
+  g.entities.length = 0;
+  for (let r = 0; r < g.tiles.length; r++) {
+    for (let c = 0; c < g.tiles[r].length; c++) g.tiles[r][c] = false;
+  }
+
+  const row = 20;
+  for (let c = 10; c <= 12; c++) g.tiles[row][c] = true;
+
+  setPlayer(g, cellX(g, 11), row * g.CONFIG.TILE_SIZE - 20, "permeating");
+  step(g);
+
+  assertNear(g.CONFIG.PERMEATE_PULL_ACCEL, 0.6, "permeate center pull was not doubled");
+  assertNear(g.player.vy, 0.6, "permeate center pull did not apply the tuned acceleration");
+}
+
+function testThinMassKeepsExistingReboundCurve() {
+  const g = makeGame();
+
+  g.entities.length = 0;
+  for (let r = 0; r < g.tiles.length; r++) {
+    for (let c = 0; c < g.tiles[r].length; c++) g.tiles[r][c] = false;
+  }
+
+  const row = 20;
+  for (let c = 10; c <= 12; c++) g.tiles[row][c] = true;
+
+  setPlayer(g, cellX(g, 11), row * g.CONFIG.TILE_SIZE, "permeating");
+  const rebound = g.shouldRebound(g.playerRect());
+  const expected = g.CONFIG.PLAYER_H / (g.CONFIG.PLAYER_H + g.CONFIG.TILE_SIZE);
+
+  assert(rebound.fire === true, "thin lower-body overlap did not allow rebound");
+  assertNear(rebound.strength, expected, "thin mass received deep rebound bonus");
+}
+
+function testDeepStaticMassRewardsBottomDive() {
+  const g = makeGame();
+
+  g.entities.length = 0;
+  for (let r = 0; r < g.tiles.length; r++) {
+    for (let c = 0; c < g.tiles[r].length; c++) g.tiles[r][c] = false;
+  }
+
+  const topRow = 20;
+  const bottomRow = 24;
+  for (let r = topRow; r <= bottomRow; r++) {
+    for (let c = 10; c <= 12; c++) g.tiles[r][c] = true;
+  }
+
+  const topY = topRow * g.CONFIG.TILE_SIZE;
+  const bottomY = (bottomRow + 1) * g.CONFIG.TILE_SIZE;
+  const fullChargeDepth = g.CONFIG.PLAYER_H + g.CONFIG.TILE_SIZE;
+
+  setPlayer(g, cellX(g, 11), topY + fullChargeDepth - g.CONFIG.PLAYER_H, "permeating");
+  const mid = g.shouldRebound(g.playerRect());
+
+  setPlayer(g, cellX(g, 11), bottomY - g.CONFIG.PLAYER_H, "permeating");
+  const deep = g.shouldRebound(g.playerRect());
+
+  assertNear(mid.strength, 1, "old full-charge depth should not receive deep bonus yet");
+  assert(deep.strength > mid.strength, "bottom dive in tall static mass did not strengthen rebound");
+  assertNear(deep.strength, g.CONFIG.REBOUND_MAX_STRENGTH, "bottom dive did not reach tuned max strength");
+}
+
 function paintRect(rows, c, r, cols, rowCount, ch) {
   for (let rr = r; rr < r + rowCount; rr++) {
     for (let cc = c; cc < c + cols; cc++) rows[rr][cc] = ch;
@@ -616,6 +682,37 @@ function testDynamicSolidCanTriggerRebound() {
   }
 }
 
+function testDeepDynamicMassRewardsBottomDive() {
+  const g = makeGame();
+  const originalLength = g.LEVELS.length;
+
+  try {
+    pushDynamicFixture(g, {
+      kind: "mover",
+      name: "tall rebound mass",
+      char: "A",
+      role: "rebound",
+      motion: { kind: "horizontal", amplitude: { x: 0, y: 0 }, speed: 0, phase: 0 }
+    }, { char: "A", c: 12, r: 28, cols: 4, rows: 5 });
+
+    const e = g.entities[0];
+    const fullChargeDepth = g.CONFIG.PLAYER_H + g.CONFIG.TILE_SIZE;
+
+    setPlayer(g, e.x + 32, e.y + fullChargeDepth - g.CONFIG.PLAYER_H, "permeating");
+    const mid = g.shouldRebound(g.playerRect());
+
+    setPlayer(g, e.x + 32, e.y + e.h - g.CONFIG.PLAYER_H, "permeating");
+    const deep = g.shouldRebound(g.playerRect());
+
+    assertNear(mid.strength, 1, "dynamic old full-charge depth should not receive deep bonus yet");
+    assert(deep.strength > mid.strength, "bottom dive in tall dynamic mass did not strengthen rebound");
+    assertNear(deep.strength, g.CONFIG.REBOUND_MAX_STRENGTH, "dynamic bottom dive did not reach tuned max strength");
+  } finally {
+    g.LEVELS.length = originalLength;
+    g.loadLevel(0);
+  }
+}
+
 function testAsteroidImpactRecoversToCheckpoint() {
   const g = makeGame();
   const originalLength = g.LEVELS.length;
@@ -658,6 +755,9 @@ const tests = [
   ["manual queue consumes on surface", testManualQueueConsumesOnSurface],
   ["upper-body-only release waits until clear", testUpperBodyOnlyReleaseDoesNotRebound],
   ["blocked upward escape recovers from stuck", testBlockedUpwardEscapeBecomesStuck],
+  ["permeation center pull uses tuned accel", testPermeationCenterPullUsesTunedAccel],
+  ["thin mass keeps existing rebound curve", testThinMassKeepsExistingReboundCurve],
+  ["deep static mass rewards bottom dive", testDeepStaticMassRewardsBottomDive],
   ["entity chars normalize geometry", testEntityCharMarkersNormalizeGeometry],
   ["repeated entity chars create clusters", testRepeatedEntityCharCreatesMultipleClusters],
   ["irregular entity markers are rejected", testIrregularEntityMarkerIsRejected],
@@ -668,6 +768,7 @@ const tests = [
   ["moving entity steps deterministically", testMovingEntityStepsDeterministically],
   ["solid player rides moving platform", testSolidPlayerRidesMovingPlatform],
   ["dynamic solid can trigger rebound", testDynamicSolidCanTriggerRebound],
+  ["deep dynamic mass rewards bottom dive", testDeepDynamicMassRewardsBottomDive],
   ["asteroid impact recovers to checkpoint", testAsteroidImpactRecoversToCheckpoint]
 ];
 
