@@ -68,6 +68,12 @@ There is no build step. `index.html` can be opened directly in a browser.
 - Levels may be wider than the 960 px viewport. The camera tracks both
   horizontal and vertical player movement through `updateCamera()`, clamping to
   the active level bounds.
+- Authored levels must be reachable under the measured player limits in
+  `smoke-test.js`. The reachability smoke test derives standable terrain and
+  mover surfaces from the map, then checks spawn-to-goal traversal using normal
+  jump height, rebound height by mass depth, pass-through caps, horizontal
+  reach, and two-row player clearance. When changing terrain or mover geometry,
+  prefer fixing unreachable gaps in the map over loosening the audit.
 - If level switching changes, keep `window.gameInternals` useful for tests by
   exposing live getters for active level data, dimensions, and camera position.
 - Rebound tuning is intentionally target-based. `reboundTargetRiseTiles()`
@@ -116,6 +122,8 @@ Add smoke coverage when changing:
   rebound target heights, minimum pass-through fall heights, and max-speed
   pass-through thickness
 - level loading or goal completion
+- authored level reachability, especially terrain gaps, rebound mass heights,
+  moving platform surfaces, player clearance, and goal shelf access
 - camera tracking or active level dimensions
 - exposed `window.gameInternals` test hooks
 
@@ -129,4 +137,5 @@ Add smoke coverage when changing:
   maps are encouraged when the route benefits from horizontal traversal. Keep
   entity lists ordered roughly in route order so the level design is easy to
   scan from code. Place entity letters and checkpoint digits where they belong
-  in the route, and keep same-letter entity clusters rectangular.
+  in the route, keep same-letter entity clusters rectangular, and run the
+  reachability smoke test before relying on a visually plausible route.

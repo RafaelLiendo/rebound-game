@@ -358,7 +358,7 @@ function testAuthoredLevelsHaveValidMarkersAndStarts() {
   });
 }
 
-const LEVEL_ROUTE_LIMITS = {
+const LEVEL_REACH_LIMITS = {
   normalJumpTiles: 2,
   maxPassThroughRows: 5,
   minimumClearanceRows: 2,
@@ -366,163 +366,69 @@ const LEVEL_ROUTE_LIMITS = {
   minimumFallThroughByRows: [0, 2, 4, 5, 5, 5]
 };
 
-const AUTHORED_LEVEL_ROUTES = [
-  {
-    level: 0,
-    nodes: [
-      { solid: true, c: 2, r: 43, label: "spawn floor" },
-      { solid: true, c: 12, r: 39, label: "entry shelf" },
-      { solid: true, c: 30, r: 35, label: "middle shelf" },
-      { solid: true, c: 40, r: 27, label: "deep gate mass" },
-      { solid: true, c: 63, r: 19, label: "upper step" },
-      { solid: true, c: 68, r: 10, label: "goal shelf" }
-    ]
-  },
-  {
-    level: 1,
-    nodes: [
-      { solid: true, c: 2, r: 43, label: "spawn floor" },
-      { solid: true, c: 12, r: 39, label: "entry choir block" },
-      { solid: true, c: 28, r: 33, label: "lower well" },
-      { solid: true, c: 40, r: 26, label: "checkpoint well" },
-      { solid: true, c: 55, r: 20, label: "upper well" },
-      { solid: true, c: 66, r: 8, label: "goal shelf" }
-    ]
-  },
-  {
-    level: 2,
-    nodes: [
-      { solid: true, c: 2, r: 43, label: "spawn floor" },
-      { solid: true, c: 20, r: 39, label: "entry court block" },
-      { solid: true, c: 35, r: 31, label: "lower rebound court" },
-      { solid: true, c: 50, r: 25, label: "checkpoint court" },
-      { solid: true, c: 66, r: 18, label: "upper rebound court" },
-      { solid: true, c: 82, r: 9, label: "goal shelf" }
-    ]
-  },
-  {
-    level: 3,
-    nodes: [
-      { solid: true, c: 2, r: 43, label: "spawn floor" },
-      { entity: "entry shuttle", label: "entry shuttle" },
-      { solid: true, c: 20, r: 37, label: "entry ledge" },
-      { entity: "breathing lift mass", label: "breathing lift mass" },
-      { solid: true, c: 40, r: 25, label: "checkpoint ledge" },
-      { entity: "pendulum rebound mass", label: "pendulum rebound mass" },
-      { solid: true, c: 58, r: 16, label: "upper ledge" },
-      { entity: "exit shuttle", label: "exit shuttle" },
-      { solid: true, c: 72, r: 8, label: "goal shelf" }
-    ]
-  },
-  {
-    level: 4,
-    nodes: [
-      { solid: true, c: 3, r: 43, label: "spawn floor" },
-      { solid: true, c: 15, r: 39, label: "entry atrium block" },
-      { solid: true, c: 6, r: 34, label: "lower atrium mass" },
-      { solid: true, c: 8, r: 21, label: "left atrium mass" },
-      { solid: true, c: 50, r: 14, label: "right atrium mass" },
-      { solid: true, c: 60, r: 7, label: "goal shelf" }
-    ]
-  },
-  {
-    level: 5,
-    nodes: [
-      { solid: true, c: 4, r: 32, label: "spawn rooftop" },
-      { solid: true, c: 20, r: 36, label: "lower drop shelf" },
-      { solid: true, c: 35, r: 39, label: "exchange basin" },
-      { solid: true, c: 50, r: 34, label: "checkpoint shelf" },
-      { solid: true, c: 62, r: 29, label: "deep exchange mass" },
-      { solid: true, c: 76, r: 6, label: "goal shelf" }
-    ]
-  },
-  {
-    level: 6,
-    nodes: [
-      { solid: true, c: 2, r: 43, label: "spawn floor" },
-      { solid: true, c: 14, r: 39, label: "first chain ledge" },
-      { entity: "chain mass one", label: "chain mass one" },
-      { solid: true, c: 23, r: 33, label: "second chain ledge" },
-      { entity: "chain mass two", label: "chain mass two" },
-      { solid: true, c: 33, r: 28, label: "third chain ledge" },
-      { entity: "chain mass three", label: "chain mass three" },
-      { solid: true, c: 43, r: 23, label: "fourth chain ledge" },
-      { entity: "chain mass four", label: "chain mass four" },
-      { solid: true, c: 53, r: 18, label: "upper chain ledge" },
-      { solid: true, c: 63, r: 13, label: "crown approach" },
-      { solid: true, c: 68, r: 6, label: "goal shelf" }
-    ]
-  },
-  {
-    level: 7,
-    nodes: [
-      { solid: true, c: 3, r: 43, label: "spawn floor" },
-      { solid: true, c: 16, r: 39, label: "outer hull ledge" },
-      { entity: "outer hull pendulum", label: "outer hull pendulum" },
-      { solid: true, c: 32, r: 33, label: "lower debris mass" },
-      { solid: true, c: 52, r: 28, label: "checkpoint debris mass" },
-      { entity: "wide rebound ferry", label: "wide rebound ferry" },
-      { solid: true, c: 70, r: 20, label: "signal crown mass" },
-      { solid: true, c: 86, r: 5, label: "goal shelf" }
-    ]
-  }
-];
-
-function findConnectedRects(rows, predicate) {
-  const seen = Array.from({ length: rows.length }, () => Array(rows[0].length).fill(false));
-  const rects = [];
-  for (let r = 0; r < rows.length; r++) {
-    for (let c = 0; c < rows[r].length; c++) {
-      if (seen[r][c] || !predicate(rows[r][c])) continue;
-      const stack = [{ c, r }];
-      let minC = c;
-      let maxC = c;
-      let minR = r;
-      let maxR = r;
-      seen[r][c] = true;
-      while (stack.length > 0) {
-        const cell = stack.pop();
-        minC = Math.min(minC, cell.c);
-        maxC = Math.max(maxC, cell.c);
-        minR = Math.min(minR, cell.r);
-        maxR = Math.max(maxR, cell.r);
-        for (const next of [
-          { c: cell.c + 1, r: cell.r },
-          { c: cell.c - 1, r: cell.r },
-          { c: cell.c, r: cell.r + 1 },
-          { c: cell.c, r: cell.r - 1 }
-        ]) {
-          if (
-            next.r < 0 ||
-            next.r >= rows.length ||
-            next.c < 0 ||
-            next.c >= rows[next.r].length ||
-            seen[next.r][next.c] ||
-            !predicate(rows[next.r][next.c])
-          ) {
-            continue;
-          }
-          seen[next.r][next.c] = true;
-          stack.push(next);
-        }
-      }
-      rects.push({ c: minC, r: minR, w: maxC - minC + 1, h: maxR - minR + 1, type: "solid" });
-    }
-  }
-  return rects;
+function tileAt(level, r, c) {
+  if (r < 0 || r >= level.map.length || c < 0 || c >= level.map[0].length) return ".";
+  return level.map[r][c];
 }
 
-function routeNodesForLevel(level) {
-  const nodes = findConnectedRects(level.map, (ch) => ch === "#").map((rect) => ({
-    c: rect.c,
-    r: rect.r,
-    w: rect.w,
-    h: rect.h,
-    type: "solid",
-    name: "terrain"
-  }));
+function isSolidTile(level, r, c) {
+  return tileAt(level, r, c) === "#";
+}
+
+function hasPlayerClearance(level, r, c) {
+  for (let clearR = r - LEVEL_REACH_LIMITS.minimumClearanceRows; clearR < r; clearR++) {
+    if (isSolidTile(level, clearR, c)) return false;
+  }
+  return true;
+}
+
+function staticColumnHeight(level, r, c) {
+  let height = 0;
+  while (isSolidTile(level, r + height, c)) height++;
+  return height;
+}
+
+function addStaticSurfaceNodes(level, nodes) {
+  let id = nodes.length;
+  for (let r = 0; r < level.map.length; r++) {
+    let c = 0;
+    while (c < level.map[0].length) {
+      if (!isSolidTile(level, r, c) || isSolidTile(level, r - 1, c) || !hasPlayerClearance(level, r, c)) {
+        c++;
+        continue;
+      }
+
+      const start = c;
+      let maxHeight = 0;
+      while (
+        c < level.map[0].length &&
+        isSolidTile(level, r, c) &&
+        !isSolidTile(level, r - 1, c) &&
+        hasPlayerClearance(level, r, c)
+      ) {
+        maxHeight = Math.max(maxHeight, staticColumnHeight(level, r, c));
+        c++;
+      }
+
+      nodes.push({
+        id: id++,
+        c: start,
+        r,
+        w: c - start,
+        h: maxHeight,
+        type: "terrain",
+        name: "terrain"
+      });
+    }
+  }
+}
+
+function addMoverSurfaceNodes(level, nodes) {
+  let id = nodes.length;
   for (const entity of level.entities) {
+    if (entity.type !== "mover") continue;
     nodes.push({
+      id: id++,
       c: entity.c,
       r: entity.r,
       w: entity.w,
@@ -532,87 +438,202 @@ function routeNodesForLevel(level) {
       role: entity.role
     });
   }
+}
+
+function surfaceNodesForLevel(level) {
+  const nodes = [];
+  addStaticSurfaceNodes(level, nodes);
+  addMoverSurfaceNodes(level, nodes);
   return nodes;
 }
 
-function resolveRouteNode(level, nodes, spec) {
-  if (spec.entity) {
-    const entity = nodes.find((node) => node.name === spec.entity);
-    assert(entity, level.name + " route missing entity " + spec.entity);
-    return entity;
-  }
-  const solid = nodes.find((node) =>
-    node.type === "solid" &&
-    node.r === spec.r &&
-    spec.c >= node.c &&
-    spec.c < node.c + node.w
-  );
-  assert(solid, level.name + " route missing solid " + spec.label + " at c" + spec.c + " r" + spec.r);
-  return solid;
+function rangeGapTiles(a, b) {
+  if (a.c + a.w <= b.c) return b.c - (a.c + a.w);
+  if (b.c + b.w <= a.c) return a.c - (b.c + b.w);
+  return 0;
 }
 
 function bottomReboundLimitTiles(rows) {
-  return LEVEL_ROUTE_LIMITS.bottomReboundByRows[Math.min(rows, LEVEL_ROUTE_LIMITS.maxPassThroughRows)];
+  return LEVEL_REACH_LIMITS.bottomReboundByRows[Math.min(rows, LEVEL_REACH_LIMITS.maxPassThroughRows)];
 }
 
-function clearanceIsOpen(level, node, c) {
-  for (let r = node.r - LEVEL_ROUTE_LIMITS.minimumClearanceRows; r < node.r; r++) {
-    if (r < 0) continue;
-    const ch = level.map[r][c];
-    if (ch === "#" || /[A-Za-z]/.test(ch)) return false;
+function ballisticRisePixelsForTest(g, launchSpeed) {
+  let vy = -launchSpeed;
+  let y = 0;
+  let peak = 0;
+  for (let i = 0; i < 240; i++) {
+    vy = Math.min(g.CONFIG.MAX_FALL_SPEED, vy + g.CONFIG.GRAVITY);
+    y += vy;
+    peak = Math.min(peak, y);
+    if (vy >= 0 && y > peak) break;
   }
-  return true;
+  return -peak;
 }
 
-function describeRouteNode(node, label) {
-  return label + " c" + node.c + "-" + (node.c + node.w - 1) + " r" + node.r + " h" + node.h;
+function launchSpeedForRiseTilesForTest(g, riseTiles) {
+  const targetPixels = riseTiles * g.CONFIG.TILE_SIZE;
+  let low = 0;
+  let high = 64;
+  while (ballisticRisePixelsForTest(g, high) < targetPixels) high *= 2;
+  for (let i = 0; i < 24; i++) {
+    const mid = (low + high) / 2;
+    if (ballisticRisePixelsForTest(g, mid) < targetPixels) low = mid;
+    else high = mid;
+  }
+  return high;
 }
 
-function testAuthoredLevelRoutesRespectPlayerLimits() {
-  const g = makeGame();
+function ascentFramesAtRise(g, launchSpeed, riseTiles) {
+  const targetY = -riseTiles * g.CONFIG.TILE_SIZE;
+  const tolerance = 2;
+  let vy = -launchSpeed;
+  let y = 0;
+  let reachedHeight = riseTiles <= 0;
+  for (let frames = 1; frames <= 600; frames++) {
+    vy = Math.min(g.CONFIG.MAX_FALL_SPEED, vy + g.CONFIG.GRAVITY);
+    y += vy;
+    if (y <= targetY + tolerance) reachedHeight = true;
+    if (reachedHeight && y >= targetY - tolerance && vy >= 0) return frames;
+  }
+  return 0;
+}
 
-  for (const route of AUTHORED_LEVEL_ROUTES) {
-    const level = g.LEVELS[route.level];
-    const nodes = routeNodesForLevel(level);
-    const resolved = route.nodes.map((spec) => {
-      const node = resolveRouteNode(level, nodes, spec);
-      assert(
-        clearanceIsOpen(level, node, spec.c || node.c),
-        level.name + " route node " + spec.label + " has less than " +
-          LEVEL_ROUTE_LIMITS.minimumClearanceRows + " rows of player clearance"
-      );
-      return { spec, node };
-    });
+function fallFramesToDrop(g, fallTiles) {
+  const targetY = Math.max(0, fallTiles) * g.CONFIG.TILE_SIZE;
+  let vy = 0;
+  let y = 0;
+  for (let frames = 1; frames <= 600; frames++) {
+    vy = Math.min(g.CONFIG.MAX_FALL_SPEED, vy + g.CONFIG.GRAVITY);
+    y += vy;
+    if (y >= targetY) return frames;
+  }
+  return 600;
+}
 
-    for (let i = 0; i < resolved.length - 1; i++) {
-      const from = resolved[i];
-      const to = resolved[i + 1];
-      const riseTiles = from.node.r - to.node.r;
-      const leg = level.name + " " + from.spec.label + " -> " + to.spec.label;
-      if (riseTiles <= LEVEL_ROUTE_LIMITS.normalJumpTiles) continue;
+function horizontalReachTilesForFrames(g, frames) {
+  return frames * g.CONFIG.MAX_RUN_SPEED / g.CONFIG.TILE_SIZE + g.CONFIG.PLAYER_W / g.CONFIG.TILE_SIZE;
+}
 
-      assert(
-        from.node.h <= LEVEL_ROUTE_LIMITS.maxPassThroughRows,
-        leg + " requires permeating " + from.node.h + " rows; max-speed pass-through is " +
-          LEVEL_ROUTE_LIMITS.maxPassThroughRows + " rows"
-      );
+function movementAnalysis(g, from, to) {
+  const riseTiles = from.r - to.r;
+  const gapTiles = rangeGapTiles(from, to);
+  let verticalLimitTiles = Infinity;
+  let horizontalLimitTiles = 0;
+  let mode = "fall";
 
-      const reboundTiles = bottomReboundLimitTiles(from.node.h);
-      const fallThroughTiles = LEVEL_ROUTE_LIMITS.minimumFallThroughByRows[from.node.h];
-      assert(
-        fallThroughTiles <= LEVEL_ROUTE_LIMITS.maxPassThroughRows,
-        leg + " needs " + fallThroughTiles + " tiles of fall-through setup; max-speed setup is " +
-          LEVEL_ROUTE_LIMITS.maxPassThroughRows + " tiles"
-      );
-      assert(
-        riseTiles <= reboundTiles,
-        leg + " rises " + riseTiles + " tiles from " +
-          describeRouteNode(from.node, from.spec.label) + " to " +
-          describeRouteNode(to.node, to.spec.label) + "; bottom rebound limit is " +
-          reboundTiles + " tiles after a " + fallThroughTiles + "-tile fall-through setup"
-      );
+  if (riseTiles <= 0) {
+    horizontalLimitTiles = horizontalReachTilesForFrames(g, fallFramesToDrop(g, -riseTiles));
+  } else if (riseTiles <= LEVEL_REACH_LIMITS.normalJumpTiles) {
+    mode = "jump";
+    verticalLimitTiles = LEVEL_REACH_LIMITS.normalJumpTiles;
+    horizontalLimitTiles = horizontalReachTilesForFrames(
+      g,
+      ascentFramesAtRise(g, launchSpeedForRiseTilesForTest(g, LEVEL_REACH_LIMITS.normalJumpTiles), riseTiles)
+    );
+  } else {
+    mode = "rebound";
+    verticalLimitTiles = bottomReboundLimitTiles(from.h);
+    const fallThroughTiles = LEVEL_REACH_LIMITS.minimumFallThroughByRows[Math.min(from.h, LEVEL_REACH_LIMITS.maxPassThroughRows)];
+    if (from.h > LEVEL_REACH_LIMITS.maxPassThroughRows || fallThroughTiles > LEVEL_REACH_LIMITS.maxPassThroughRows) {
+      return {
+        ok: false,
+        mode,
+        riseTiles,
+        gapTiles,
+        verticalLimitTiles,
+        horizontalLimitTiles,
+        reason: "pass-through cap"
+      };
+    }
+    horizontalLimitTiles = horizontalReachTilesForFrames(
+      g,
+      ascentFramesAtRise(g, launchSpeedForRiseTilesForTest(g, verticalLimitTiles), riseTiles)
+    );
+  }
+
+  return {
+    ok: riseTiles <= verticalLimitTiles && gapTiles <= horizontalLimitTiles,
+    mode,
+    riseTiles,
+    gapTiles,
+    verticalLimitTiles,
+    horizontalLimitTiles,
+    reason: riseTiles > verticalLimitTiles ? "vertical" : "horizontal"
+  };
+}
+
+function describeSurface(node) {
+  return node.name + " c" + node.c + "-" + (node.c + node.w - 1) + " r" + node.r + " h" + node.h;
+}
+
+function nodeContainsColumn(node, c) {
+  return c >= node.c && c < node.c + node.w;
+}
+
+function findStartNodes(level, nodes) {
+  return nodes.filter((node) =>
+    nodeContainsColumn(node, level.spawn.c) &&
+    node.r >= level.spawn.r &&
+    node.r <= level.spawn.r + 1
+  );
+}
+
+function isGoalNode(level, node) {
+  return node.r === level.goal.r + 1 && nodeContainsColumn(node, level.goal.c);
+}
+
+function explainBestBlockedMove(g, nodes, reachable) {
+  let best = null;
+  for (const from of nodes) {
+    if (!reachable.has(from.id)) continue;
+    for (const to of nodes) {
+      if (reachable.has(to.id)) continue;
+      const move = movementAnalysis(g, from, to);
+      const verticalOver = Math.max(0, move.riseTiles - move.verticalLimitTiles);
+      const horizontalOver = Math.max(0, move.gapTiles - move.horizontalLimitTiles);
+      const score = verticalOver * 10 + horizontalOver + Math.max(0, to.r);
+      if (!best || score < best.score) best = { from, to, move, score };
     }
   }
+  if (!best) return "no candidate move found";
+  return describeSurface(best.from) + " -> " + describeSurface(best.to) +
+    " needs " + best.move.mode + " rise " + best.move.riseTiles +
+    " tiles and gap " + best.move.gapTiles.toFixed(2) +
+    " tiles; limits are rise " + best.move.verticalLimitTiles +
+    " and gap " + best.move.horizontalLimitTiles.toFixed(2);
+}
+
+function testAuthoredLevelsAreReachableWithinPlayerLimits() {
+  const g = makeGame();
+
+  g.LEVELS.forEach((level, index) => {
+    const nodes = surfaceNodesForLevel(level);
+    const starts = findStartNodes(level, nodes);
+    assert(starts.length > 0, "level " + (index + 1) + " " + level.name + " has no standable spawn surface");
+    assert(
+      nodes.some((node) => isGoalNode(level, node)),
+      "level " + (index + 1) + " " + level.name + " has no standable goal shelf"
+    );
+
+    const queue = starts.slice();
+    const reachable = new Set(starts.map((node) => node.id));
+    for (let cursor = 0; cursor < queue.length; cursor++) {
+      const from = queue[cursor];
+      for (const to of nodes) {
+        if (reachable.has(to.id)) continue;
+        if (!movementAnalysis(g, from, to).ok) continue;
+        reachable.add(to.id);
+        queue.push(to);
+      }
+    }
+
+    assert(
+      nodes.some((node) => reachable.has(node.id) && isGoalNode(level, node)),
+      "level " + (index + 1) + " " + level.name +
+        " goal shelf is unreachable within player limits; closest blocked move: " +
+        explainBestBlockedMove(g, nodes, reachable)
+    );
+  });
 }
 
 function testCameraTracksHorizontallyInWideLevel() {
@@ -1404,7 +1425,7 @@ function testAsteroidImpactRecoversToCheckpoint() {
 const tests = [
   ["load level recalculates map", testLoadLevelRecalculatesMap],
   ["authored levels have valid starts", testAuthoredLevelsHaveValidMarkersAndStarts],
-  ["authored level routes respect player limits", testAuthoredLevelRoutesRespectPlayerLimits],
+  ["authored levels are reachable within player limits", testAuthoredLevelsAreReachableWithinPlayerLimits],
   ["camera tracks horizontally in wide levels", testCameraTracksHorizontallyInWideLevel],
   ["load level rejects uneven rows", testLoadLevelRejectsUnevenRows],
   ["reset respawns at active checkpoint", testResetRespawnsAtActiveCheckpoint],
