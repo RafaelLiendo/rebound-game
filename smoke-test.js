@@ -115,7 +115,7 @@ function testAuthoredLevelsHaveValidMarkersAndStarts() {
     const spawnCount = (joined.match(/S/g) || []).length;
     const goalCount = (joined.match(/G/g) || []).length;
 
-    assert(width === 30, "level " + (index + 1) + " is not 30 columns wide");
+    assert(width >= 30, "level " + (index + 1) + " is narrower than the viewport");
     assert(level.map.length === 45, "level " + (index + 1) + " is not 45 rows tall");
     assert(level.map.every((row) => row.length === width), "level " + (index + 1) + " has uneven rows");
     assert(spawnCount === 1, "level " + (index + 1) + " must have exactly one spawn");
@@ -129,6 +129,38 @@ function testAuthoredLevelsHaveValidMarkersAndStarts() {
     assert(g.player.grounded === true, "level " + (index + 1) + " spawn is not grounded");
     assert(g.goalRect.y < g.spawnCell.y, "level " + (index + 1) + " goal is not above the spawn");
   });
+}
+
+function testCameraTracksHorizontallyInWideLevel() {
+  const g = makeGame();
+  const originalLength = g.LEVELS.length;
+  const rows = Array.from({ length: 45 }, () => Array(60).fill("."));
+  rows[43][1] = "S";
+  rows[40][58] = "G";
+  for (let c = 0; c < 60; c++) rows[44][c] = "#";
+
+  g.LEVELS.push({
+    name: "Wide Camera Fixture",
+    map: rows.map((row) => row.join(""))
+  });
+
+  try {
+    g.loadLevel(originalLength);
+    assert(g.COLS === 60, "wide level columns were not parsed");
+    assert(g.levelW === 60 * g.CONFIG.TILE_SIZE, "wide level width was not calculated");
+
+    g.updateCamera();
+    assertNear(g.cameraX, 0, "camera should start at the left edge");
+
+    setPlayer(g, cellX(g, 50), standY(g, 44), "solid");
+    g.updateCamera();
+
+    assert(g.cameraX > 0, "camera did not pan right in a wide level");
+    assert(g.cameraX <= g.levelW - g.CONFIG.VIEW_W, "camera panned past the right edge");
+  } finally {
+    g.LEVELS.pop();
+    g.loadLevel(0);
+  }
 }
 
 function testLoadLevelRejectsUnevenRows() {
@@ -314,6 +346,7 @@ function testBlockedUpwardEscapeBecomesStuck() {
 const tests = [
   ["load level recalculates map", testLoadLevelRecalculatesMap],
   ["authored levels have valid starts", testAuthoredLevelsHaveValidMarkersAndStarts],
+  ["camera tracks horizontally in wide levels", testCameraTracksHorizontallyInWideLevel],
   ["load level rejects uneven rows", testLoadLevelRejectsUnevenRows],
   ["reset restarts current level", testResetRestartsCurrentLevel],
   ["winning advances to next level", testWinningAdvancesToNextLevel],
