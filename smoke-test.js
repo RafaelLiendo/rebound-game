@@ -42,6 +42,31 @@ function resetKeys(g) {
   for (const k of Object.keys(g.keyReleased)) g.keyReleased[k] = false;
 }
 
+function scratchRows(rowCount = 50, colCount = 70) {
+  const rows = Array.from({ length: rowCount }, () => Array(colCount).fill("."));
+  rows[1][colCount - 2] = "@";
+  rows[rowCount - 3][1] = "0";
+  rows[rowCount - 1].fill("#");
+  return rows.map((row) => row.join(""));
+}
+
+function ensureScratchWorld(g, rowCount = 50, colCount = 70) {
+  if (g.ROWS >= rowCount && g.COLS >= colCount) return;
+  const index = g.LEVELS.length;
+  g.LEVELS.push(g.defineLevel({
+    name: "Smoke Measurement Fixture",
+    map: scratchRows(rowCount, colCount)
+  }));
+  g.loadLevel(index);
+}
+
+function loadFirstDesignedLevel(g) {
+  const index = g.LEVELS.findIndex((level) => !/^Bug /.test(level.name));
+  assert(index >= 0, "no non-bug authored level found");
+  g.loadLevel(index);
+  return index;
+}
+
 function setPlayer(g, x, y, state = "solid") {
   const p = g.player;
   p.x = x;
@@ -61,6 +86,9 @@ function setPlayer(g, x, y, state = "solid") {
   p.permeateStartFeetY = state === "permeating" ? y + g.CONFIG.PLAYER_H : null;
   p.embeddedDepth = 0;
   p.reboundStrength = 0;
+  p.reboundTargetRiseTiles = 0;
+  p.reboundLaunchVelocity = 0;
+  p.reboundExitY = null;
   p.stuckTimer = 0;
   p.flashTimer = 0;
   g.probeGrounded();
@@ -99,7 +127,8 @@ function tilesFromPixels(g, pixels) {
   return pixels / g.CONFIG.TILE_SIZE;
 }
 
-function clearMeasurementWorld(g) {
+function clearMeasurementWorld(g, rowCount = 50, colCount = 70) {
+  ensureScratchWorld(g, rowCount, colCount);
   g.entities.length = 0;
   for (let r = 0; r < g.tiles.length; r++) {
     for (let c = 0; c < g.tiles[r].length; c++) g.tiles[r][c] = false;
@@ -147,6 +176,32 @@ function measurePeakFeetRise(g, setup, maxFrames = 360) {
   return tilesFromPixels(g, startFeet - peakFeet);
 }
 
+function measureCurrentReboundPeakFromExit(g, maxFrames = 480) {
+  const rebound = g.shouldRebound(g.playerRect());
+  assert(rebound.fire === true, "rebound measurement did not start from a valid release");
+  assert(rebound.exitY !== null && rebound.exitY !== undefined, "rebound measurement did not provide a planned exit");
+
+  release(g, "ShiftLeft");
+  step(g);
+  assert(g.player.state !== "stuck", "rebound measurement became stuck on release");
+
+  let exited = false;
+  let peakY = Infinity;
+  for (let i = 0; i < maxFrames; i++) {
+    step(g);
+    assert(g.player.state !== "stuck", "rebound measurement became stuck after release");
+    if (!exited && g.player.y <= rebound.exitY + 0.001) exited = true;
+    if (exited) peakY = Math.min(peakY, g.player.y);
+    if (exited && g.player.vy > 0 && g.player.y > peakY + 5) break;
+  }
+
+  assert(exited, "rebound measurement never reached the planned exit");
+  return {
+    rebound,
+    riseTiles: tilesFromPixels(g, rebound.exitY - peakY)
+  };
+}
+
 function measureNormalJumpPeak(g) {
   const fixture = buildMeasurementFixture(g, { floorRow: 32, leftCol: 10 });
   return measurePeakFeetRise(g, () => {
@@ -163,14 +218,8 @@ function measureReboundPeak(g, massRows, releasePoint) {
     fixture.topY + (fixture.bottomY - fixture.topY) / 2 :
     fixture.bottomY;
 
-  const peak = measurePeakFeetRise(g, () => {
-    setPlayer(g, fixture.x, releaseFeet - g.CONFIG.PLAYER_H, "permeating");
-    release(g, "ShiftLeft");
-    return releaseFeet;
-  }, 360);
-
-  assert(g.player.state !== "stuck", "rebound measurement became stuck for " + massRows + " rows at " + releasePoint);
-  return peak;
+  setPlayer(g, fixture.x, releaseFeet - g.CONFIG.PLAYER_H, "permeating");
+  return measureCurrentReboundPeakFromExit(g, 480).riseTiles;
 }
 
 function simulatePassThrough(g, massRows, fallTiles, maxFrames = 360) {
@@ -342,8 +391,6 @@ function testAuthoredLevelsHaveValidMarkersAndStarts() {
     const spawnCount = (joined.match(/0/g) || []).length;
     const goalCount = (joined.match(/@/g) || []).length;
 
-    assert(width > 30, "level " + (index + 1) + " does not take advantage of horizontal camera tracking");
-    assert(level.map.length === 45, "level " + (index + 1) + " is not 45 rows tall");
     assert(level.map.every((row) => row.length === width), "level " + (index + 1) + " has uneven rows");
     assert(spawnCount === 1, "level " + (index + 1) + " must have exactly one spawn checkpoint 0");
     assert(goalCount === 1, "level " + (index + 1) + " must have exactly one goal");
@@ -607,6 +654,8 @@ function testAuthoredLevelsAreReachableWithinPlayerLimits() {
   const g = makeGame();
 
   g.LEVELS.forEach((level, index) => {
+    if (/^Bug /.test(level.name)) return;
+
     const nodes = surfaceNodesForLevel(level);
     const starts = findStartNodes(level, nodes);
     assert(starts.length > 0, "level " + (index + 1) + " " + level.name + " has no standable spawn surface");
@@ -753,8 +802,77 @@ function testFinalLevelDoesNotAdvancePastEnd() {
   assert(g.player.won === true, "final level did not remain on the completion screen");
 }
 
+function testBugOneAutoChainReachesTop() {
+  const g = makeGame();
+  g.loadLevel(0);
+  setPlayer(g, cellX(g, 7), standY(g, 60), "solid");
+
+  press(g, "ShiftLeft");
+  step(g, 60);
+  press(g, "ControlLeft");
+
+  let chainStarted = false;
+  const chainExitSpeeds = [];
+  let previousState = g.player.state;
+  for (let i = 0; i < 2400; i++) {
+    step(g);
+    if (previousState === "rebounding" && g.player.state === "permeating") {
+      chainExitSpeeds.push(g.player.vy);
+    }
+    previousState = g.player.state;
+    if (g.player.state === "permeating" || g.player.state === "rebounding") chainStarted = true;
+    assert(g.player.state !== "stuck", "bug 1 chain entered stuck recovery");
+    assert(!chainStarted || g.player.state !== "solid", "bug 1 chain became solid before reaching the top");
+    if (g.player.won) {
+      assert(chainExitSpeeds.length >= 4, "bug 1 chain did not record enough rebound exits");
+      for (let j = 0; j < Math.min(4, chainExitSpeeds.length); j++) {
+        assert(chainExitSpeeds[j] <= -g.CONFIG.REBOUND_SURFACE_SPEED + 0.001, "bug 1 chain exit velocity collapsed to " + chainExitSpeeds[j].toFixed(3));
+      }
+      return;
+    }
+  }
+
+  throw new Error("bug 1 auto-chain did not reach the top goal");
+}
+
+function testBugTwoTallMassReboundsOnce() {
+  const g = makeGame();
+  g.loadLevel(1);
+  g.goalRect.x = -1000;
+  g.goalRect.y = -1000;
+
+  const massTopRow = 17;
+  const massBottomRow = 37;
+  const bottomY = (massBottomRow + 1) * g.CONFIG.TILE_SIZE;
+  setPlayer(g, cellX(g, 7), bottomY - g.CONFIG.PLAYER_H, "permeating");
+
+  const rebound = g.shouldRebound(g.playerRect());
+  assert(rebound.fire === true, "bug 2 tall mass did not allow rebound");
+  assertApprox(rebound.targetRiseTiles, 32, 0.001, "bug 2 tall mass did not use capped 5-row rebound tuning");
+
+  release(g, "ShiftLeft");
+  let reboundStarts = 0;
+  let exited = false;
+  let peakY = Infinity;
+  let previousState = g.player.state;
+  for (let i = 0; i < 900; i++) {
+    step(g);
+    if (previousState !== "rebounding" && g.player.state === "rebounding") reboundStarts++;
+    previousState = g.player.state;
+    assert(g.player.state !== "stuck", "bug 2 tall mass entered stuck recovery");
+    if (!exited && g.player.y <= rebound.exitY + 0.001) exited = true;
+    if (exited) peakY = Math.min(peakY, g.player.y);
+    if (exited && g.player.vy > 0 && g.player.y > peakY + 5) break;
+  }
+
+  assert(exited, "bug 2 tall mass rebound did not reach its planned exit");
+  assert(reboundStarts === 1, "bug 2 tall mass rebounded " + reboundStarts + " times instead of once");
+  assertApprox(tilesFromPixels(g, rebound.exitY - peakY), 32, 0.05, "bug 2 bottom rebound did not rise 32 tiles from the top exit");
+}
+
 function testAutoAssistClimbsTunedThickStack() {
   const g = makeGame();
+  clearMeasurementWorld(g);
 
   for (let r = 0; r < g.tiles.length; r++) {
     for (let c = 0; c < g.tiles[r].length; c++) g.tiles[r][c] = false;
@@ -802,6 +920,7 @@ function testAutoAssistClimbsTunedThickStack() {
 
 function testManualQueueConsumesOnSurface() {
   const g = makeGame();
+  clearMeasurementWorld(g);
 
   for (let r = 0; r < g.tiles.length; r++) {
     for (let c = 0; c < g.tiles[r].length; c++) g.tiles[r][c] = false;
@@ -837,6 +956,7 @@ function testManualQueueConsumesOnSurface() {
 
 function testUpperBodyOnlyReleaseDoesNotRebound() {
   const g = makeGame();
+  clearMeasurementWorld(g);
 
   for (let r = 0; r < g.tiles.length; r++) {
     for (let c = 0; c < g.tiles[r].length; c++) g.tiles[r][c] = false;
@@ -857,19 +977,22 @@ function testUpperBodyOnlyReleaseDoesNotRebound() {
 
 function testBlockedUpwardEscapeBecomesStuck() {
   const g = makeGame();
+  clearMeasurementWorld(g);
 
   for (let r = 0; r < g.tiles.length; r++) {
     for (let c = 0; c < g.tiles[r].length; c++) g.tiles[r][c] = false;
   }
 
-  for (let r = 14; r <= 24; r++) {
+  for (let r = 20; r <= 30; r++) {
     for (let c = 18; c <= 20; c++) g.tiles[r][c] = true;
   }
+  for (let c = 18; c <= 20; c++) g.tiles[18][c] = true;
 
-  setPlayer(g, cellX(g, 19), 23 * g.CONFIG.TILE_SIZE, "permeating");
+  setPlayer(g, cellX(g, 19), 29 * g.CONFIG.TILE_SIZE, "permeating");
   release(g, "ShiftLeft");
   step(g);
 
+  for (let i = 0; i < 120 && g.player.state !== "stuck"; i++) step(g);
   assert(g.player.state === "stuck", "blocked upward escape did not enter stuck state");
   step(g, Math.ceil(g.CONFIG.STUCK_DURATION / g.CONFIG.DT) + 2);
   assert(g.player.state === "solid", "stuck recovery did not return to solid");
@@ -878,6 +1001,7 @@ function testBlockedUpwardEscapeBecomesStuck() {
 
 function testPermeationCenterPullUsesTunedAccel() {
   const g = makeGame();
+  clearMeasurementWorld(g);
 
   g.entities.length = 0;
   for (let r = 0; r < g.tiles.length; r++) {
@@ -896,6 +1020,7 @@ function testPermeationCenterPullUsesTunedAccel() {
 
 function testThinMassKeepsExistingReboundCurve() {
   const g = makeGame();
+  clearMeasurementWorld(g);
 
   g.entities.length = 0;
   for (let r = 0; r < g.tiles.length; r++) {
@@ -914,6 +1039,7 @@ function testThinMassKeepsExistingReboundCurve() {
 
 function testDeepStaticMassRewardsBottomDive() {
   const g = makeGame();
+  clearMeasurementWorld(g);
 
   g.entities.length = 0;
   for (let r = 0; r < g.tiles.length; r++) {
@@ -940,33 +1066,49 @@ function testDeepStaticMassRewardsBottomDive() {
   assertApprox(deep.targetRiseTiles, 32, 0.001, "bottom dive did not reach the tuned 5-row target height");
 }
 
+function testTallStaticMassReboundsFromExit() {
+  const g = makeGame();
+  clearMeasurementWorld(g, 80, 70);
+
+  const topRow = 35;
+  const bottomRow = 55;
+  for (let r = topRow; r <= bottomRow; r++) {
+    for (let c = 10; c <= 12; c++) g.tiles[r][c] = true;
+  }
+
+  const topY = topRow * g.CONFIG.TILE_SIZE;
+  const bottomY = (bottomRow + 1) * g.CONFIG.TILE_SIZE;
+  const centerFeet = topY + (bottomY - topY) / 2;
+
+  setPlayer(g, cellX(g, 11), centerFeet - g.CONFIG.PLAYER_H, "permeating");
+  const center = measureCurrentReboundPeakFromExit(g, 900);
+
+  setPlayer(g, cellX(g, 11), bottomY - g.CONFIG.PLAYER_H, "permeating");
+  const bottom = measureCurrentReboundPeakFromExit(g, 900);
+
+  assertApprox(center.rebound.targetRiseTiles, 32, 0.001, "tall mass center release did not use capped rebound tuning");
+  assertApprox(bottom.rebound.targetRiseTiles, 32, 0.001, "tall mass bottom release did not use capped rebound tuning");
+  assertApprox(bottom.riseTiles, 32, 0.05, "tall mass bottom release did not rise 32 tiles from the planned exit");
+  assert(bottom.riseTiles >= center.riseTiles - 0.05, "tall mass bottom release rose lower than center release");
+}
+
 function testFirstLevelDeepReboundCanReachGoalHeight() {
   const g = makeGame();
-  g.loadLevel(0);
+  loadFirstDesignedLevel(g);
 
   const deepMassCol = 55;
   const massBottomRow = 30;
   const bottomY = (massBottomRow + 1) * g.CONFIG.TILE_SIZE;
   setPlayer(g, cellX(g, deepMassCol), bottomY - g.CONFIG.PLAYER_H, "permeating");
-  const startFeet = feetY(g);
   const target = g.shouldRebound(g.playerRect()).targetRiseTiles;
 
-  release(g, "ShiftLeft");
-  step(g);
-  assert(g.player.state === "rebounding", "first level bottom dive did not start rebound");
-
-  let peakFeet = startFeet;
-  for (let i = 0; i < 360; i++) {
-    step(g);
-    peakFeet = Math.min(peakFeet, feetY(g));
-  }
-
-  const rise = tilesFromPixels(g, startFeet - peakFeet);
-  assertApprox(rise, target, 0.05, "first level deep rebound did not follow its tuned target height");
+  const measured = measureCurrentReboundPeakFromExit(g, 480);
+  assertApprox(measured.riseTiles, target, 0.05, "first level deep rebound did not follow its exit-relative target height");
 }
 
 function testPermeationBottomBrakeResistsDeepSinking() {
   const g = makeGame();
+  clearMeasurementWorld(g);
 
   g.entities.length = 0;
   for (let r = 0; r < g.tiles.length; r++) {
@@ -990,6 +1132,7 @@ function testPermeationBottomBrakeResistsDeepSinking() {
 
 function testShortFallDoesNotAccidentallyPermeateThroughThinMass() {
   const g = makeGame();
+  clearMeasurementWorld(g);
 
   g.entities.length = 0;
   for (let r = 0; r < g.tiles.length; r++) {
@@ -1018,6 +1161,7 @@ function testShortFallDoesNotAccidentallyPermeateThroughThinMass() {
 
 function testHighFallCanPermeateThroughThinMass() {
   const g = makeGame();
+  clearMeasurementWorld(g);
 
   g.entities.length = 0;
   for (let r = 0; r < g.tiles.length; r++) {
@@ -1046,6 +1190,7 @@ function testHighFallCanPermeateThroughThinMass() {
 
 function testVeryHighFallCanPermeateThroughLargeMass() {
   const g = makeGame();
+  clearMeasurementWorld(g);
 
   g.entities.length = 0;
   for (let r = 0; r < g.tiles.length; r++) {
@@ -1431,6 +1576,8 @@ const tests = [
   ["reset respawns at active checkpoint", testResetRespawnsAtActiveCheckpoint],
   ["winning advances to next level", testWinningAdvancesToNextLevel],
   ["final level stops at end", testFinalLevelDoesNotAdvancePastEnd],
+  ["bug 1 auto-chain reaches top", testBugOneAutoChainReachesTop],
+  ["bug 2 tall mass rebounds once", testBugTwoTallMassReboundsOnce],
   ["auto assist climbs tuned thick stack", testAutoAssistClimbsTunedThickStack],
   ["manual queue consumes on surface", testManualQueueConsumesOnSurface],
   ["upper-body-only release waits until clear", testUpperBodyOnlyReleaseDoesNotRebound],
@@ -1438,6 +1585,7 @@ const tests = [
   ["permeation center pull uses tuned accel", testPermeationCenterPullUsesTunedAccel],
   ["thin mass keeps existing rebound curve", testThinMassKeepsExistingReboundCurve],
   ["deep static mass rewards bottom dive", testDeepStaticMassRewardsBottomDive],
+  ["tall static mass rebounds from planned exit", testTallStaticMassReboundsFromExit],
   ["first level deep rebound can reach goal height", testFirstLevelDeepReboundCanReachGoalHeight],
   ["permeation bottom brake resists deep sinking", testPermeationBottomBrakeResistsDeepSinking],
   ["short fall does not accidentally permeate through thin mass", testShortFallDoesNotAccidentallyPermeateThroughThinMass],

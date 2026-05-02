@@ -343,6 +343,7 @@
       REBOUND_SURFACE_SPEED: 16,
       REBOUND_MAX_CHARGE: 2.4,
       REBOUND_SHALLOW_MIN_FACTOR: 0.22,
+      REBOUND_TUNED_MAX_ROWS: 5,
       PERMEATE_DRAG: 0.22,
       PERMEATE_PULL_ACCEL: 0.9,
       PERMEATE_BOTTOM_BRAKE_ACCEL: 0.45,
@@ -562,6 +563,120 @@
     }
 
     var LEVELS = [
+      defineLevel({
+        name: "Bug 1: chain permeate/rebound to the top keeps reseting the player. Expected chaining to feel rewarding like a multi-phase rocket accelerating at each tile rebound. Player quickly transition between permeating and robounding and not become solid until it reaches the top where the goal is.",
+        map: [
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          ".......@..",
+          "##########",
+          "..........",
+          "##########",
+          "..........",
+          "##########",
+          "..........",
+          "##########",
+          "..........",
+          "##########",
+          "..........",
+          "##########",
+          "..........",
+          "##########",
+          "..........",
+          "##########",
+          "..........",
+          "##########",
+          "..........",
+          "##########",
+          "..........",
+          "##########",
+          "..........",
+          "##########",
+          "..........",
+          "##########",
+          "..........",
+          "##########",
+          "..........",
+          "##########",
+          "..........",
+          "##########",
+          "..........",
+          "##########",
+          "..........",
+          "##########",
+          "..........",
+          "##########",
+          "..........",
+          "##########",
+          "..........",
+          "##########",
+          "..........",
+          "...0......",
+          "##########",
+          "##########"
+        ]
+      }),
+      defineLevel({
+        name: "Bug 2: Multiple tiles are not behaving as one and causes the rebound to feel bumpy. Expected multiple tiles together to feel like a single large tile instead of many individual ones. Player should Permeate/Rebound only once and only become solid after reaching the top where the goal is.",
+        map: [
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          "..........",
+          ".......@..",
+          "##########",
+          "##########",
+          "##########",
+          "##########",
+          "##########",
+          "##########",
+          "##########",
+          "##########",
+          "##########",
+          "##########",
+          "##########",
+          "##########",
+          "##########",
+          "##########",
+          "##########",
+          "##########",
+          "##########",
+          "##########",
+          "##########",
+          "##########",
+          "##########",
+          "..........",
+          "...0......",
+          "##########",
+          "##########"
+        ]
+      }),
       defineLevel({
         name: "Shadow Sink Gate",
         map: [
@@ -1507,16 +1622,18 @@
       };
     }
 
-    function countSolidRowsAbove(rect) {
-      var start = firstOverlappedSolidRow(rect);
-      if (start === null) return 0;
-      var lane = laneColumns(rect);
-      var count = 0;
-      for (var r = start; r >= 0; r--) {
-        if (!rowHasSolidInLane(r, lane)) break;
-        count++;
-      }
-      return count;
+    function reboundTuning(depthPixels, massPixels) {
+      var cappedRows = Math.max(1, Math.min(
+        Math.ceil(massPixels / TS),
+        CONFIG.REBOUND_TUNED_MAX_ROWS
+      ));
+      var tunedMassPixels = cappedRows * TS;
+      var tunedDepthPixels = clamp(depthPixels, 0, tunedMassPixels);
+      var targetRiseTiles = reboundTargetRiseTiles(tunedDepthPixels, tunedMassPixels);
+      return {
+        targetRiseTiles: targetRiseTiles,
+        launchVelocity: launchSpeedForRiseTiles(targetRiseTiles)
+      };
     }
 
     function reboundTargetRiseTiles(depthPixels, massPixels) {
@@ -1588,17 +1705,19 @@
     }
 
     function staticMassInfo(rect) {
-      var ext = contiguousMassExtents(rect);
-      if (!ext || overlappingSolidTiles(bottomHalfRect(rect)).length === 0) {
+      var lower = bottomHalfRect(rect);
+      var ext = contiguousMassExtents(lower);
+      if (!ext || overlappingSolidTiles(lower).length === 0) {
         return null;
       }
 
       var massPixels = ext.botY - ext.topY;
       var depthPixels = clamp(rect.y + rect.h - ext.topY, 0, Math.max(CONFIG.PLAYER_H + TS * 2, massPixels));
-      var targetRiseTiles = reboundTargetRiseTiles(depthPixels, massPixels);
-      var launchVelocity = launchSpeedForRiseTiles(targetRiseTiles - depthPixels / TS);
+      var tuning = reboundTuning(depthPixels, massPixels);
+      var targetRiseTiles = tuning.targetRiseTiles;
+      var launchVelocity = tuning.launchVelocity;
       var strength = reboundVisualCharge(targetRiseTiles);
-      var rows = countSolidRowsAbove(rect);
+      var rows = Math.ceil(depthPixels / TS);
       return {
         type: "tile",
         pixels: depthPixels,
@@ -1611,7 +1730,7 @@
         topY: ext.topY,
         botY: ext.botY,
         exitY: ext.topY - rect.h,
-        stuck: rows > CONFIG.STUCK_SEARCH_RADIUS,
+        stuck: false,
         entity: null
       };
     }
@@ -1624,8 +1743,9 @@
         if (!e.solid || !rectsOverlap(bottom, entityRect(e))) continue;
         var massPixels = e.h;
         var depthPixels = clamp(rect.y + rect.h - e.y, 0, Math.max(CONFIG.PLAYER_H + TS * 2, massPixels));
-        var targetRiseTiles = reboundTargetRiseTiles(depthPixels, massPixels);
-        var launchVelocity = launchSpeedForRiseTiles(targetRiseTiles - depthPixels / TS);
+        var tuning = reboundTuning(depthPixels, massPixels);
+        var targetRiseTiles = tuning.targetRiseTiles;
+        var launchVelocity = tuning.launchVelocity;
         var strength = reboundVisualCharge(targetRiseTiles);
         if (!best || strength > best.strength) {
           best = {
@@ -1641,7 +1761,7 @@
             botY: e.y + e.h,
             exitY: e.y - rect.h,
             entity: e,
-            stuck: (rect.y - e.y) > CONFIG.STUCK_SEARCH_RADIUS * TS
+            stuck: false
           };
         }
       }
@@ -1713,7 +1833,7 @@
 
     function beginRebound(result) {
       player.state = "rebounding";
-      player.vy = -CONFIG.REBOUND_SURFACE_SPEED;
+      player.vy = Math.min(player.vy, -CONFIG.REBOUND_SURFACE_SPEED);
       player.reboundSurfaced = false;
       player.reboundAirborneTimer = CONFIG.REBOUND_STATE_DURATION;
       player.permeateUntilClear = false;
@@ -1740,6 +1860,10 @@
         player.queuedPermeate = false;
         player.queuedPermeateSource = null;
         player.reboundSurfaced = false;
+        return;
+      }
+      if (overlappingMatter(playerRect()).length > 0) {
+        setStuck();
         return;
       }
       player.state = "solid";
@@ -2065,11 +2189,13 @@
             player.vy = Math.min(CONFIG.MAX_FALL_SPEED, player.vy + CONFIG.GRAVITY);
           }
         } else if (player.state === "rebounding") {
-          if (embedded && !player.reboundSurfaced) {
-            // Rebound target height is measured from the release depth. Travel
-            // through matter is direct, then surfacing applies the exact launch
+          var travelingToExit = !player.reboundSurfaced &&
+            (player.reboundExitY === null || player.y > player.reboundExitY);
+          if (travelingToExit) {
+            // Rebound target height is measured from the planned exit. Travel
+            // to the planned exit is direct, then surfacing applies the exact launch
             // velocity needed for the remaining open-air rise.
-            player.vy = -CONFIG.REBOUND_SURFACE_SPEED;
+            player.vy = Math.min(player.vy, -CONFIG.REBOUND_SURFACE_SPEED);
           } else {
             if (!player.reboundSurfaced) {
               player.reboundSurfaced = true;
@@ -2084,7 +2210,8 @@
       }
 
       embedded = overlappingMatter(playerRect()).length > 0;
-      if (player.state === "permeating" || (player.state === "rebounding" && embedded && !player.reboundSurfaced)) {
+      var reboundingToExit = player.state === "rebounding" && !player.reboundSurfaced;
+      if (player.state === "permeating" || reboundingToExit) {
         player.x += player.vx;
         player.y += player.vy;
         player.x = clamp(player.x, 0, levelW - CONFIG.PLAYER_W);
@@ -2103,15 +2230,21 @@
       }
 
       if (player.state === "rebounding") {
-        var nowEmbedded = overlappingMatter(playerRect()).length > 0;
-        if (!nowEmbedded && !player.reboundSurfaced) {
-          if (player.reboundExitY !== null) {
-            player.y = player.reboundExitY;
+        if (!player.reboundSurfaced) {
+          var reachedExit = player.reboundExitY === null ?
+            overlappingMatter(playerRect()).length === 0 :
+            player.y <= player.reboundExitY;
+          if (reachedExit) {
+            if (player.reboundExitY !== null) {
+              player.y = player.reboundExitY;
+            }
+            player.vy = player.queuedPermeate ?
+              Math.min(player.vy, -player.reboundLaunchVelocity) :
+              -player.reboundLaunchVelocity;
+            player.reboundSurfaced = true;
+            player.reboundAirborneTimer = CONFIG.REBOUND_STATE_DURATION;
+            probeGrounded();
           }
-          player.vy = -player.reboundLaunchVelocity;
-          player.reboundSurfaced = true;
-          player.reboundAirborneTimer = CONFIG.REBOUND_STATE_DURATION;
-          probeGrounded();
         }
         if (player.reboundSurfaced) {
           consumeReboundExit();
@@ -2663,7 +2796,6 @@
       overlappingMatter: overlappingMatter,
       bottomHalfOverlapsSolid: bottomHalfOverlapsSolid,
       contiguousMassExtents: contiguousMassExtents,
-      countSolidRowsAbove: countSolidRowsAbove,
       matterMassInfo: matterMassInfo,
       shouldRebound: shouldRebound,
       moveAndCollide: moveAndCollide,

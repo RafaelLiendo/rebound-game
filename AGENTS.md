@@ -2,6 +2,10 @@
 
 Guidance for AI agents working in this repository.
 
+## Git Rules
+
+Never commit or stage changes, let the user do it manually. You may check the staged changes to understand what changes, but you may only change the working directory.
+
 ## Project Shape
 
 This is a small single-page canvas platformer. The playable game lives in
@@ -80,6 +84,15 @@ There is no build step. `index.html` can be opened directly in a browser.
   maps lower-body depth and mass height to the measured jump/rebound table, and
   the launch-speed helper converts that target into fixed-step motion. Prefer
   extending this model over adding separate deep-bonus formulas.
+- Rebound targets are measured from the planned top exit, `reboundExitY`, not
+  from the release depth. While rebounding, the player phases upward until the
+  planned exit, then receives the launch velocity for the full target rise.
+  Deep releases in tall masses should still reach the capped target height from
+  that exit; do not subtract embedded depth from post-exit launch height.
+- Manual and assisted chain rebounds should preserve strong upward energy at
+  rebound boundaries. Avoid changes that collapse queued chain exits into small
+  per-tile bumps; keep the smoke coverage that records chain exit velocity and
+  exit-relative rebound peak height.
 - Permeation pass-through is also target-based: short falls should be resisted
   by drag, center pull, and bottom brake, while falls that meet the tuned tile
   threshold should carry through. Keep max-speed entry through static matter
