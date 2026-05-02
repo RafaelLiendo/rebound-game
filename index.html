@@ -60,24 +60,32 @@
       position: absolute;
       left: 18px;
       right: 18px;
-      bottom: 16px;
+      top: 16px;
       display: grid;
-      grid-template-columns: minmax(170px, 390px) minmax(130px, 260px);
-      gap: 12px;
-      align-items: center;
+      grid-template-columns: minmax(290px, 460px) max-content;
+      grid-template-areas:
+        "status controls"
+        "meter controls";
+      justify-content: space-between;
+      align-items: start;
+      column-gap: 16px;
+      row-gap: 8px;
       pointer-events: none;
     }
 
     .status {
+      grid-area: status;
       display: flex;
       gap: 10px;
       align-items: center;
       min-width: 0;
-      padding: 9px 11px;
+      min-height: 46px;
+      padding: 8px 10px;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: var(--panel);
       backdrop-filter: blur(10px);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
     }
 
     #stateLabel {
@@ -105,7 +113,9 @@
     }
 
     .meter {
-      height: 18px;
+      grid-area: meter;
+      width: min(100%, 280px);
+      height: 16px;
       overflow: hidden;
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -113,6 +123,7 @@
         linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px) 0 0 / 32px 100%,
         rgba(14, 19, 25, 0.8);
       backdrop-filter: blur(10px);
+      box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
     }
 
     #pressureFill {
@@ -125,17 +136,24 @@
     }
 
     .controls {
-      position: absolute;
-      top: 14px;
-      left: 18px;
-      padding: 8px 10px;
+      grid-area: controls;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      justify-self: end;
+      min-width: 164px;
+      padding: 11px 14px;
       border: 1px solid var(--line);
       border-radius: 8px;
-      background: rgba(14, 19, 25, 0.58);
+      background: var(--panel);
       color: var(--muted);
       font-size: 12px;
       font-weight: 700;
+      line-height: 1.22;
       pointer-events: none;
+      white-space: nowrap;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
     }
 
     @media (max-width: 720px) {
@@ -151,9 +169,21 @@
       .hud {
         left: 10px;
         right: 10px;
-        bottom: 10px;
+        top: 10px;
         grid-template-columns: 1fr;
+        grid-template-areas:
+          "status"
+          "meter"
+          "controls";
         gap: 8px;
+      }
+
+      .meter {
+        width: min(100%, 220px);
+      }
+
+      .controls {
+        justify-self: start;
       }
 
       #messageLabel,
@@ -166,7 +196,6 @@
 <body>
   <main class="shell">
     <canvas id="game" width="960" height="540" aria-label="Permeation buoyancy game demo"></canvas>
-    <div class="controls">Move A/D or Arrows | Jump Space | Permeate Shift | Assist Ctrl+Shift | Reset R</div>
     <section class="hud" aria-label="Game status">
       <div class="status">
         <span id="stateLabel">solid</span>
@@ -174,6 +203,13 @@
       </div>
       <div class="meter" aria-label="pressure">
         <span id="pressureFill"></span>
+      </div>
+      <div class="controls">
+        <span>Move A/D or Arrows</span>
+        <span>Jump Space</span>
+        <span>Permeate Shift</span>
+        <span>Assist Ctrl+Shift</span>
+        <span>Reset R</span>
       </div>
     </section>
   </main>
