@@ -1,0 +1,81 @@
+# AGENTS.md
+
+Guidance for AI agents working in this repository.
+
+## Project Shape
+
+This is a small single-page canvas platformer. The playable game lives in
+`index.html`, with embedded CSS and JavaScript. The current mechanic is
+permeation buoyancy: the player can become intangible, sink through solid
+matter, and release from depth to rebound upward.
+
+Supporting notes:
+
+- `Plan.md` describes the intended game feel, state machine, controls, and
+  behavior validations.
+- `Lore.md` describes the larger Shadow Cats / Open Claw fantasy. Treat it as
+  useful direction for theme, naming, and future expansion.
+- `smoke-test.js` is the lightweight Node-based regression suite.
+
+## Commands
+
+Run the smoke tests with:
+
+```powershell
+node .\smoke-test.js
+```
+
+There is no build step. `index.html` can be opened directly in a browser.
+
+## Implementation Notes
+
+- Keep the game dependency-free unless there is a strong reason to add a
+  library.
+- Prefer small, direct edits in `index.html`; this project intentionally keeps
+  the demo compact.
+- Preserve the existing fixed-step simulation style in `step(dt)`.
+- The tile map uses 32 px cells and string rows:
+  - `#` = solid terrain
+  - `.` = empty space
+  - `S` = player spawn
+  - `G` = goal
+- Multiple levels are defined in `LEVELS`. Use `loadLevel(index)` rather than
+  mutating map globals directly.
+- If level switching changes, keep `window.gameInternals` useful for tests by
+  exposing live getters for active level data.
+
+## Gameplay Expectations
+
+Maintain the feel described in `Plan.md`:
+
+- Permeation should feel viscous, not like normal free fall.
+- Rebound should be based on meaningful lower-body embedding in solid matter.
+- Upper-body-only release should phase clear without firing a rebound.
+- Blocked upward escape should enter `stuck` briefly and recover cleanly.
+- Manual and assisted chain rebound should remain responsive.
+- Reset with `R` should restart the current level.
+- Completing a non-final level should allow advancing to the next level.
+
+## Testing Expectations
+
+Before finishing behavior changes, run:
+
+```powershell
+node .\smoke-test.js
+```
+
+Add smoke coverage when changing:
+
+- player state transitions
+- collision or tile parsing
+- rebound/stuck behavior
+- level loading or goal completion
+- exposed `window.gameInternals` test hooks
+
+## Style
+
+- Keep code readable and plain JavaScript.
+- Use ASCII unless an existing file clearly calls for otherwise.
+- Avoid broad refactors while tuning mechanics.
+- Keep HUD text short enough to fit the existing overlay.
+- When adding levels, preserve consistent row widths within each map.
