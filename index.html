@@ -931,7 +931,7 @@
       return out;
     }
 
-    function overlappingSolidMatter(rect) {
+    function overlappingMatter(rect) {
       var out = solidTileRects(rect);
       for (var i = 0; i < entities.length; i++) {
         var e = entities[i];
@@ -941,8 +941,12 @@
       return out;
     }
 
+    function overlappingSolidMatter(rect) {
+      return overlappingMatter(rect);
+    }
+
     function bottomHalfOverlapsSolid(rect) {
-      return overlappingSolidMatter(bottomHalfRect(rect)).length > 0;
+      return overlappingMatter(bottomHalfRect(rect)).length > 0;
     }
 
     function laneColumns(rect) {
@@ -998,29 +1002,43 @@
       return count;
     }
 
-    function staticEmbeddedDepthInfo(rect) {
+    function staticMassInfo(rect) {
       var ext = contiguousMassExtents(rect);
       if (!ext || overlappingSolidTiles(bottomHalfRect(rect)).length === 0) {
-        return { pixels: 0, strength: 0 };
+        return null;
       }
 
       var depthPixels = clamp(rect.y + rect.h - ext.topY, 0, CONFIG.PLAYER_H + TS * 2);
       var strength = clamp(depthPixels / (CONFIG.PLAYER_H + TS), 0.22, 1);
-      return { pixels: depthPixels, strength: strength };
+      var rows = countSolidRowsAbove(rect);
+      return {
+        type: "tile",
+        pixels: depthPixels,
+        strength: strength,
+        rows: rows,
+        centerY: ext.centerY,
+        topY: ext.topY,
+        stuck: rows > CONFIG.STUCK_SEARCH_RADIUS,
+        entity: null
+      };
     }
 
-    function dynamicEmbeddedDepthInfo(rect) {
+    function entityMassInfo(rect) {
       var bottom = bottomHalfRect(rect);
-      var best = { pixels: 0, strength: 0, entity: null, stuck: false };
+      var best = null;
       for (var i = 0; i < entities.length; i++) {
         var e = entities[i];
         if (!e.solid || !rectsOverlap(bottom, entityRect(e))) continue;
         var depthPixels = clamp(rect.y + rect.h - e.y, 0, CONFIG.PLAYER_H + TS * 2);
         var strength = clamp(depthPixels / (CONFIG.PLAYER_H + TS), 0.22, 1);
-        if (strength > best.strength) {
+        if (!best || strength > best.strength) {
           best = {
+            type: e.type,
             pixels: depthPixels,
             strength: strength,
+            rows: Math.ceil(depthPixels / TS),
+            centerY: e.y + e.h / 2,
+            topY: e.y,
             entity: e,
             stuck: (rect.y - e.y) > CONFIG.STUCK_SEARCH_RADIUS * TS
           };
@@ -1029,25 +1047,29 @@
       return best;
     }
 
+    function matterMassInfo(rect) {
+      var stat = staticMassInfo(rect);
+      var ent = entityMassInfo(rect);
+      if (ent && (!stat || ent.strength > stat.strength)) return ent;
+      if (stat) return stat;
+      return { pixels: 0, strength: 0, rows: 0, centerY: null, topY: 0, stuck: false, entity: null };
+    }
+
     function embeddedDepthInfo(rect) {
-      var stat = staticEmbeddedDepthInfo(rect);
-      var dyn = dynamicEmbeddedDepthInfo(rect);
-      if (dyn.strength > stat.strength) return dyn;
-      return stat;
+      var mass = matterMassInfo(rect);
+      return { pixels: mass.pixels, strength: mass.strength, entity: mass.entity };
     }
 
     function shouldRebound(rect) {
       if (!bottomHalfOverlapsSolid(rect)) return { fire: false, stuck: false, rows: 0, strength: 0 };
-      var rows = countSolidRowsAbove(rect);
-      var dynamicDepth = dynamicEmbeddedDepthInfo(rect);
-      var depth = embeddedDepthInfo(rect);
+      var mass = matterMassInfo(rect);
       return {
         fire: true,
-        stuck: rows > CONFIG.STUCK_SEARCH_RADIUS || !!dynamicDepth.stuck,
-        rows: Math.max(rows, dynamicDepth.entity ? Math.ceil(dynamicDepth.pixels / TS) : 0),
-        depth: depth.pixels,
-        strength: depth.strength,
-        entity: depth.entity || null
+        stuck: !!mass.stuck,
+        rows: mass.rows,
+        depth: mass.pixels,
+        strength: mass.strength,
+        entity: mass.entity || null
       };
     }
 
@@ -1116,7 +1138,7 @@
         var stepAmount = Math.min(1, remaining) * sign;
         if (axis === "x") {
           player.x += stepAmount;
-          var xHits = overlappingSolidMatter(playerRect());
+          var xHits = overlappingMatter(playerRect());
           if (xHits.length > 0) {
             if (sign > 0) {
               var minX = xHits.reduce(function (m, t) { return Math.min(m, t.x); }, Infinity);
@@ -1130,7 +1152,7 @@
           }
         } else {
           player.y += stepAmount;
-          var yHits = overlappingSolidMatter(playerRect());
+          var yHits = overlappingMatter(playerRect());
           if (yHits.length > 0) {
             if (sign > 0) {
               var minY = yHits.reduce(function (m, t) { return Math.min(m, t.y); }, Infinity);
@@ -1151,13 +1173,13 @@
     }
 
     function probeGrounded() {
-      if (overlappingSolidMatter(playerRect()).length > 0) {
+      if (overlappingMatter(playerRect()).length > 0) {
         player.grounded = false;
         return false;
       }
       var rect = playerRect();
       var probe = { x: rect.x, y: rect.y + 1, w: rect.w, h: rect.h };
-      player.grounded = overlappingSolidMatter(probe).length > 0;
+      player.grounded = overlappingMatter(probe).length > 0;
       return player.grounded;
     }
 
@@ -1311,9 +1333,10 @@
 
       if (player.state === "permeating") {
         var rect = playerRect();
-        var fullOverlap = overlappingSolidMatter(rect).length > 0;
+        var fullOverlap = overlappingMatter(rect).length > 0;
+        var mass = matterMassInfo(rect);
         var rebound = shouldRebound(rect);
-        player.embeddedDepth = rebound.depth || (fullOverlap ? embeddedDepthInfo(rect).pixels : 0);
+        player.embeddedDepth = rebound.depth || (fullOverlap ? mass.pixels : 0);
         if (autoChainActive && rebound.fire) {
           triggerReboundOrStuck(rebound);
           if (player.state === "rebounding") {
@@ -1333,7 +1356,7 @@
         }
       }
 
-      if (player.state === "permeating" && player.permeateUntilClear && overlappingSolidMatter(playerRect()).length === 0) {
+      if (player.state === "permeating" && player.permeateUntilClear && overlappingMatter(playerRect()).length === 0) {
         player.permeateUntilClear = false;
         player.state = "solid";
       }
@@ -1363,7 +1386,7 @@
         skipVerticalForce = true;
       }
 
-      var embedded = overlappingSolidMatter(playerRect()).length > 0;
+      var embedded = overlappingMatter(playerRect()).length > 0;
       if (player.state === "permeating" && embedded && Math.random() < 0.45) {
         var chargeForParticle = clamp((player.embeddedDepth || 0) / (CONFIG.PLAYER_H + TS), 0, 1);
         spawnMatterParticle(
@@ -1380,12 +1403,12 @@
             // gentle center-pull nudges the player toward the contiguous mass's
             // vertical midpoint. The latch deliberately skips this section so a
             // top-half-only release can drift fully clear instead of being re-caught.
-            var ext = contiguousMassExtents(playerRect());
+            var pullMass = matterMassInfo(playerRect());
             player.vy *= (1 - CONFIG.PERMEATE_DRAG);
-            if (ext) {
+            if (pullMass.centerY !== null) {
               var center = player.y + CONFIG.PLAYER_H / 2;
-              if (Math.abs(ext.centerY - center) > 2) {
-                player.vy += Math.sign(ext.centerY - center) * CONFIG.PERMEATE_PULL_ACCEL;
+              if (Math.abs(pullMass.centerY - center) > 2) {
+                player.vy += Math.sign(pullMass.centerY - center) * CONFIG.PERMEATE_PULL_ACCEL;
               }
             }
             player.vy = clamp(player.vy, -CONFIG.MAX_FALL_SPEED, CONFIG.MAX_FALL_SPEED);
@@ -1416,7 +1439,7 @@
         }
       }
 
-      embedded = overlappingSolidMatter(playerRect()).length > 0;
+      embedded = overlappingMatter(playerRect()).length > 0;
       if (player.state === "permeating" || (player.state === "rebounding" && embedded && !player.reboundSurfaced)) {
         player.x += player.vx;
         player.y += player.vy;
@@ -1436,7 +1459,7 @@
       }
 
       if (player.state === "rebounding") {
-        var nowEmbedded = overlappingSolidMatter(playerRect()).length > 0;
+        var nowEmbedded = overlappingMatter(playerRect()).length > 0;
         if (!nowEmbedded && !player.reboundSurfaced) {
           player.reboundSurfaced = true;
           player.reboundAirborneTimer = CONFIG.REBOUND_STATE_DURATION;
@@ -1970,9 +1993,11 @@
       overlappingSolidTiles: overlappingSolidTiles,
       overlappingSolidEntities: overlappingSolidEntities,
       overlappingSolidMatter: overlappingSolidMatter,
+      overlappingMatter: overlappingMatter,
       bottomHalfOverlapsSolid: bottomHalfOverlapsSolid,
       contiguousMassExtents: contiguousMassExtents,
       countSolidRowsAbove: countSolidRowsAbove,
+      matterMassInfo: matterMassInfo,
       shouldRebound: shouldRebound,
       moveAndCollide: moveAndCollide,
       probeGrounded: probeGrounded,
