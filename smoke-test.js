@@ -358,6 +358,263 @@ function testAuthoredLevelsHaveValidMarkersAndStarts() {
   });
 }
 
+const LEVEL_ROUTE_LIMITS = {
+  normalJumpTiles: 2,
+  maxPassThroughRows: 5,
+  minimumClearanceRows: 2,
+  bottomReboundByRows: [0, 2, 4, 8, 16, 32],
+  minimumFallThroughByRows: [0, 2, 4, 5, 5, 5]
+};
+
+const AUTHORED_LEVEL_ROUTES = [
+  {
+    level: 0,
+    nodes: [
+      { solid: true, c: 2, r: 43, label: "spawn floor" },
+      { solid: true, c: 12, r: 39, label: "entry shelf" },
+      { solid: true, c: 30, r: 35, label: "middle shelf" },
+      { solid: true, c: 40, r: 27, label: "deep gate mass" },
+      { solid: true, c: 63, r: 19, label: "upper step" },
+      { solid: true, c: 68, r: 10, label: "goal shelf" }
+    ]
+  },
+  {
+    level: 1,
+    nodes: [
+      { solid: true, c: 2, r: 43, label: "spawn floor" },
+      { solid: true, c: 12, r: 39, label: "entry choir block" },
+      { solid: true, c: 28, r: 33, label: "lower well" },
+      { solid: true, c: 40, r: 26, label: "checkpoint well" },
+      { solid: true, c: 55, r: 20, label: "upper well" },
+      { solid: true, c: 66, r: 8, label: "goal shelf" }
+    ]
+  },
+  {
+    level: 2,
+    nodes: [
+      { solid: true, c: 2, r: 43, label: "spawn floor" },
+      { solid: true, c: 20, r: 39, label: "entry court block" },
+      { solid: true, c: 35, r: 31, label: "lower rebound court" },
+      { solid: true, c: 50, r: 25, label: "checkpoint court" },
+      { solid: true, c: 66, r: 18, label: "upper rebound court" },
+      { solid: true, c: 82, r: 9, label: "goal shelf" }
+    ]
+  },
+  {
+    level: 3,
+    nodes: [
+      { solid: true, c: 2, r: 43, label: "spawn floor" },
+      { entity: "entry shuttle", label: "entry shuttle" },
+      { solid: true, c: 20, r: 37, label: "entry ledge" },
+      { entity: "breathing lift mass", label: "breathing lift mass" },
+      { solid: true, c: 40, r: 25, label: "checkpoint ledge" },
+      { entity: "pendulum rebound mass", label: "pendulum rebound mass" },
+      { solid: true, c: 58, r: 16, label: "upper ledge" },
+      { entity: "exit shuttle", label: "exit shuttle" },
+      { solid: true, c: 72, r: 8, label: "goal shelf" }
+    ]
+  },
+  {
+    level: 4,
+    nodes: [
+      { solid: true, c: 3, r: 43, label: "spawn floor" },
+      { solid: true, c: 15, r: 39, label: "entry atrium block" },
+      { solid: true, c: 6, r: 34, label: "lower atrium mass" },
+      { solid: true, c: 8, r: 21, label: "left atrium mass" },
+      { solid: true, c: 50, r: 14, label: "right atrium mass" },
+      { solid: true, c: 60, r: 7, label: "goal shelf" }
+    ]
+  },
+  {
+    level: 5,
+    nodes: [
+      { solid: true, c: 4, r: 32, label: "spawn rooftop" },
+      { solid: true, c: 20, r: 36, label: "lower drop shelf" },
+      { solid: true, c: 35, r: 39, label: "exchange basin" },
+      { solid: true, c: 50, r: 34, label: "checkpoint shelf" },
+      { solid: true, c: 62, r: 29, label: "deep exchange mass" },
+      { solid: true, c: 76, r: 6, label: "goal shelf" }
+    ]
+  },
+  {
+    level: 6,
+    nodes: [
+      { solid: true, c: 2, r: 43, label: "spawn floor" },
+      { solid: true, c: 14, r: 39, label: "first chain ledge" },
+      { entity: "chain mass one", label: "chain mass one" },
+      { solid: true, c: 23, r: 33, label: "second chain ledge" },
+      { entity: "chain mass two", label: "chain mass two" },
+      { solid: true, c: 33, r: 28, label: "third chain ledge" },
+      { entity: "chain mass three", label: "chain mass three" },
+      { solid: true, c: 43, r: 23, label: "fourth chain ledge" },
+      { entity: "chain mass four", label: "chain mass four" },
+      { solid: true, c: 53, r: 18, label: "upper chain ledge" },
+      { solid: true, c: 63, r: 13, label: "crown approach" },
+      { solid: true, c: 68, r: 6, label: "goal shelf" }
+    ]
+  },
+  {
+    level: 7,
+    nodes: [
+      { solid: true, c: 3, r: 43, label: "spawn floor" },
+      { solid: true, c: 16, r: 39, label: "outer hull ledge" },
+      { entity: "outer hull pendulum", label: "outer hull pendulum" },
+      { solid: true, c: 32, r: 33, label: "lower debris mass" },
+      { solid: true, c: 52, r: 28, label: "checkpoint debris mass" },
+      { entity: "wide rebound ferry", label: "wide rebound ferry" },
+      { solid: true, c: 70, r: 20, label: "signal crown mass" },
+      { solid: true, c: 86, r: 5, label: "goal shelf" }
+    ]
+  }
+];
+
+function findConnectedRects(rows, predicate) {
+  const seen = Array.from({ length: rows.length }, () => Array(rows[0].length).fill(false));
+  const rects = [];
+  for (let r = 0; r < rows.length; r++) {
+    for (let c = 0; c < rows[r].length; c++) {
+      if (seen[r][c] || !predicate(rows[r][c])) continue;
+      const stack = [{ c, r }];
+      let minC = c;
+      let maxC = c;
+      let minR = r;
+      let maxR = r;
+      seen[r][c] = true;
+      while (stack.length > 0) {
+        const cell = stack.pop();
+        minC = Math.min(minC, cell.c);
+        maxC = Math.max(maxC, cell.c);
+        minR = Math.min(minR, cell.r);
+        maxR = Math.max(maxR, cell.r);
+        for (const next of [
+          { c: cell.c + 1, r: cell.r },
+          { c: cell.c - 1, r: cell.r },
+          { c: cell.c, r: cell.r + 1 },
+          { c: cell.c, r: cell.r - 1 }
+        ]) {
+          if (
+            next.r < 0 ||
+            next.r >= rows.length ||
+            next.c < 0 ||
+            next.c >= rows[next.r].length ||
+            seen[next.r][next.c] ||
+            !predicate(rows[next.r][next.c])
+          ) {
+            continue;
+          }
+          seen[next.r][next.c] = true;
+          stack.push(next);
+        }
+      }
+      rects.push({ c: minC, r: minR, w: maxC - minC + 1, h: maxR - minR + 1, type: "solid" });
+    }
+  }
+  return rects;
+}
+
+function routeNodesForLevel(level) {
+  const nodes = findConnectedRects(level.map, (ch) => ch === "#").map((rect) => ({
+    c: rect.c,
+    r: rect.r,
+    w: rect.w,
+    h: rect.h,
+    type: "solid",
+    name: "terrain"
+  }));
+  for (const entity of level.entities) {
+    nodes.push({
+      c: entity.c,
+      r: entity.r,
+      w: entity.w,
+      h: entity.h,
+      type: entity.type,
+      name: entity.name,
+      role: entity.role
+    });
+  }
+  return nodes;
+}
+
+function resolveRouteNode(level, nodes, spec) {
+  if (spec.entity) {
+    const entity = nodes.find((node) => node.name === spec.entity);
+    assert(entity, level.name + " route missing entity " + spec.entity);
+    return entity;
+  }
+  const solid = nodes.find((node) =>
+    node.type === "solid" &&
+    node.r === spec.r &&
+    spec.c >= node.c &&
+    spec.c < node.c + node.w
+  );
+  assert(solid, level.name + " route missing solid " + spec.label + " at c" + spec.c + " r" + spec.r);
+  return solid;
+}
+
+function bottomReboundLimitTiles(rows) {
+  return LEVEL_ROUTE_LIMITS.bottomReboundByRows[Math.min(rows, LEVEL_ROUTE_LIMITS.maxPassThroughRows)];
+}
+
+function clearanceIsOpen(level, node, c) {
+  for (let r = node.r - LEVEL_ROUTE_LIMITS.minimumClearanceRows; r < node.r; r++) {
+    if (r < 0) continue;
+    const ch = level.map[r][c];
+    if (ch === "#" || /[A-Za-z]/.test(ch)) return false;
+  }
+  return true;
+}
+
+function describeRouteNode(node, label) {
+  return label + " c" + node.c + "-" + (node.c + node.w - 1) + " r" + node.r + " h" + node.h;
+}
+
+function testAuthoredLevelRoutesRespectPlayerLimits() {
+  const g = makeGame();
+
+  for (const route of AUTHORED_LEVEL_ROUTES) {
+    const level = g.LEVELS[route.level];
+    const nodes = routeNodesForLevel(level);
+    const resolved = route.nodes.map((spec) => {
+      const node = resolveRouteNode(level, nodes, spec);
+      assert(
+        clearanceIsOpen(level, node, spec.c || node.c),
+        level.name + " route node " + spec.label + " has less than " +
+          LEVEL_ROUTE_LIMITS.minimumClearanceRows + " rows of player clearance"
+      );
+      return { spec, node };
+    });
+
+    for (let i = 0; i < resolved.length - 1; i++) {
+      const from = resolved[i];
+      const to = resolved[i + 1];
+      const riseTiles = from.node.r - to.node.r;
+      const leg = level.name + " " + from.spec.label + " -> " + to.spec.label;
+      if (riseTiles <= LEVEL_ROUTE_LIMITS.normalJumpTiles) continue;
+
+      assert(
+        from.node.h <= LEVEL_ROUTE_LIMITS.maxPassThroughRows,
+        leg + " requires permeating " + from.node.h + " rows; max-speed pass-through is " +
+          LEVEL_ROUTE_LIMITS.maxPassThroughRows + " rows"
+      );
+
+      const reboundTiles = bottomReboundLimitTiles(from.node.h);
+      const fallThroughTiles = LEVEL_ROUTE_LIMITS.minimumFallThroughByRows[from.node.h];
+      assert(
+        fallThroughTiles <= LEVEL_ROUTE_LIMITS.maxPassThroughRows,
+        leg + " needs " + fallThroughTiles + " tiles of fall-through setup; max-speed setup is " +
+          LEVEL_ROUTE_LIMITS.maxPassThroughRows + " tiles"
+      );
+      assert(
+        riseTiles <= reboundTiles,
+        leg + " rises " + riseTiles + " tiles from " +
+          describeRouteNode(from.node, from.spec.label) + " to " +
+          describeRouteNode(to.node, to.spec.label) + "; bottom rebound limit is " +
+          reboundTiles + " tiles after a " + fallThroughTiles + "-tile fall-through setup"
+      );
+    }
+  }
+}
+
 function testCameraTracksHorizontallyInWideLevel() {
   const g = makeGame();
   const originalLength = g.LEVELS.length;
@@ -1147,6 +1404,7 @@ function testAsteroidImpactRecoversToCheckpoint() {
 const tests = [
   ["load level recalculates map", testLoadLevelRecalculatesMap],
   ["authored levels have valid starts", testAuthoredLevelsHaveValidMarkersAndStarts],
+  ["authored level routes respect player limits", testAuthoredLevelRoutesRespectPlayerLimits],
   ["camera tracks horizontally in wide levels", testCameraTracksHorizontallyInWideLevel],
   ["load level rejects uneven rows", testLoadLevelRejectsUnevenRows],
   ["reset respawns at active checkpoint", testResetRespawnsAtActiveCheckpoint],
