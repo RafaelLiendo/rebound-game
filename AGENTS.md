@@ -70,13 +70,22 @@ There is no build step. `index.html` can be opened directly in a browser.
   the active level bounds.
 - If level switching changes, keep `window.gameInternals` useful for tests by
   exposing live getters for active level data, dimensions, and camera position.
+- Permeation resistance should stay momentum-sensitive: slow or accidental
+  sinks should be caught by viscous pull, while high-speed intentional dives can
+  carry through thin matter, and very high falls can carry through larger
+  masses. Prefer smooth formulas that fade resistance with downward momentum
+  over hard state branches for "dive mode."
 
 ## Gameplay Expectations
 
 Maintain the feel described in `Plan.md`:
 
 - Permeation should feel viscous, not like normal free fall.
+- Intentional high falls should be able to punch through solid matter while
+  short accidental falls onto thinner tiles should still feel catchable.
 - Rebound should be based on meaningful lower-body embedding in solid matter.
+- Deep releases near the bottom of taller solid matter should produce a
+  noticeably stronger, visually distinct rebound.
 - Upper-body-only release should phase clear without firing a rebound.
 - Blocked upward escape should enter `stuck` briefly and recover cleanly.
 - Manual and assisted chain rebound should remain responsive.
@@ -98,6 +107,8 @@ Add smoke coverage when changing:
 - collision or tile parsing
 - dynamic matter, moving platforms, asteroids, or checkpoints
 - rebound/stuck behavior
+- permeation momentum, including short-fall catch behavior and high-fall
+  pass-through behavior
 - level loading or goal completion
 - camera tracking or active level dimensions
 - exposed `window.gameInternals` test hooks
