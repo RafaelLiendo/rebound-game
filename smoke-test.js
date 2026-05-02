@@ -88,9 +88,19 @@ function completeCurrentLevel(g) {
   assert(g.player.won === true, "placing player on the goal did not complete the level");
 }
 
+function findMarker(level, marker) {
+  for (let r = 0; r < level.map.length; r++) {
+    const c = level.map[r].indexOf(marker);
+    if (c >= 0) return { c, r };
+  }
+  throw new Error("marker " + marker + " not found in " + level.name);
+}
+
 function testLoadLevelRecalculatesMap() {
   const g = makeGame();
   const ts = g.CONFIG.TILE_SIZE;
+  const expectedSpawn = findMarker(g.LEVELS[1], "S");
+  const expectedGoal = findMarker(g.LEVELS[1], "G");
 
   assert(g.LEVELS.length >= 5, "game does not expose the authored level set");
   assert(g.currentLevelIndex === 0, "game did not start on level 0");
@@ -102,8 +112,8 @@ function testLoadLevelRecalculatesMap() {
   assert(g.LEVEL === g.LEVELS[1].map, "loadLevel did not update the active map");
   assert(g.tiles.length === g.LEVEL.length, "tiles were not rebuilt for the loaded level");
   assert(g.tiles.every((row) => row.length === g.LEVEL[0].length), "loaded level tile rows have inconsistent widths");
-  assert(g.spawnCell.c === 1 && g.spawnCell.r === 43, "loaded level spawn was not parsed");
-  assert(g.goalRect.x === 25 * ts && g.goalRect.y === 13 * ts, "loaded level goal was not parsed");
+  assert(g.spawnCell.c === expectedSpawn.c && g.spawnCell.r === expectedSpawn.r, "loaded level spawn was not parsed");
+  assert(g.goalRect.x === expectedGoal.c * ts && g.goalRect.y === expectedGoal.r * ts, "loaded level goal was not parsed");
 }
 
 function testAuthoredLevelsHaveValidMarkersAndStarts() {
@@ -115,7 +125,7 @@ function testAuthoredLevelsHaveValidMarkersAndStarts() {
     const spawnCount = (joined.match(/S/g) || []).length;
     const goalCount = (joined.match(/G/g) || []).length;
 
-    assert(width >= 30, "level " + (index + 1) + " is narrower than the viewport");
+    assert(width > 30, "level " + (index + 1) + " does not take advantage of horizontal camera tracking");
     assert(level.map.length === 45, "level " + (index + 1) + " is not 45 rows tall");
     assert(level.map.every((row) => row.length === width), "level " + (index + 1) + " has uneven rows");
     assert(spawnCount === 1, "level " + (index + 1) + " must have exactly one spawn");
