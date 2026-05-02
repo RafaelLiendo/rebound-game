@@ -344,13 +344,13 @@
       BUOYANCY_DEPTH_ACCEL: 0.8,
       BUOYANCY_MIN_SPEED: 12,
       BUOYANCY_MAX_SPEED: 18,
-      REBOUND_MAX_STRENGTH: 1.8,
+      REBOUND_MAX_STRENGTH: 2.4,
       DEEP_REBOUND_MIN_ROWS: 3,
-      DEEP_REBOUND_BONUS: 0.8,
-      PERMEATE_DRAG: 0.18,
-      PERMEATE_PULL_ACCEL: 0.9,
-      PERMEATE_BOTTOM_BRAKE_ACCEL: 1.1,
-      PERMEATE_MATTER_MAX_SPEED: 4.5,
+      DEEP_REBOUND_BONUS: 1.4,
+      PERMEATE_DRAG: 0.12,
+      PERMEATE_PULL_ACCEL: 0.45,
+      PERMEATE_BOTTOM_BRAKE_ACCEL: 0.4,
+      PERMEATE_MATTER_MAX_SPEED: 7,
       STUCK_SEARCH_RADIUS: 6,
       STUCK_DURATION: 0.5,
       PLAYER_W: 24,
@@ -2293,11 +2293,14 @@
       var cx = player.x + CONFIG.PLAYER_W / 2;
       var cy = player.y + CONFIG.PLAYER_H / 2;
       var charge = clamp((player.embeddedDepth || 0) / (CONFIG.PLAYER_H + TS), 0, 1);
+      var deepCharge = player.state === "rebounding" ?
+        clamp(((player.reboundStrength || 0) - 1) / (CONFIG.REBOUND_MAX_STRENGTH - 1), 0, 1) :
+        clamp(((player.embeddedDepth || 0) - (CONFIG.PLAYER_H + TS)) / (TS * 2), 0, 1);
 
       if (player.state === "permeating" || player.state === "rebounding") {
         ctx.save();
-        ctx.globalAlpha = player.state === "rebounding" ? 0.82 : 0.5 + charge * 0.3;
-        ctx.shadowBlur = 18 + charge * 18;
+        ctx.globalAlpha = player.state === "rebounding" ? 0.82 : 0.5 + charge * 0.3 + deepCharge * 0.12;
+        ctx.shadowBlur = 18 + charge * 18 + deepCharge * 18;
         ctx.shadowColor = player.state === "rebounding" ? "#ff5cf4" : "#4be7ff";
         ctx.strokeStyle = player.state === "rebounding" ? "#ff5cf4" : "#4be7ff";
         ctx.lineWidth = 2 + charge * 3;
@@ -2308,16 +2311,27 @@
         ctx.beginPath();
         ctx.ellipse(cx, cy, CONFIG.PLAYER_W * (1.3 + charge * 0.7), CONFIG.PLAYER_H * 0.46, -0.55, 0, Math.PI * 2);
         ctx.stroke();
+        if (deepCharge > 0) {
+          ctx.globalAlpha = 0.28 + deepCharge * 0.38;
+          ctx.shadowBlur = 28 + deepCharge * 20;
+          ctx.shadowColor = "#ffd166";
+          ctx.strokeStyle = "rgba(255, 209, 102, " + (0.45 + deepCharge * 0.45).toFixed(3) + ")";
+          ctx.lineWidth = 2 + deepCharge * 3;
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, CONFIG.PLAYER_W * (2 + deepCharge * 1.1), CONFIG.PLAYER_H * (0.9 + deepCharge * 0.35), -0.18, 0, Math.PI * 2);
+          ctx.stroke();
+        }
         ctx.restore();
       }
 
-      var glow = ctx.createRadialGradient(cx, cy, 2, cx, cy, 34 + charge * 42);
+      var glow = ctx.createRadialGradient(cx, cy, 2, cx, cy, 34 + charge * 42 + deepCharge * 26);
       glow.addColorStop(0, player.state === "rebounding" ? "rgba(255, 92, 244, 0.6)" : "rgba(75, 231, 255, 0.5)");
       glow.addColorStop(0.46, "rgba(181, 108, 255, 0.24)");
+      glow.addColorStop(0.72, "rgba(255, 209, 102, " + (deepCharge * 0.26).toFixed(3) + ")");
       glow.addColorStop(1, "rgba(75, 231, 255, 0)");
       ctx.fillStyle = glow;
       ctx.beginPath();
-      ctx.arc(cx, cy, 34 + charge * 42, 0, Math.PI * 2);
+      ctx.arc(cx, cy, 34 + charge * 42 + deepCharge * 26, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.save();
@@ -2401,11 +2415,14 @@
 
     function drawOverlay() {
       var depth = clamp((player.embeddedDepth || 0) / (CONFIG.PLAYER_H + TS), 0, 1);
+      var deep = player.state === "rebounding" ?
+        clamp(((player.reboundStrength || 0) - 1) / (CONFIG.REBOUND_MAX_STRENGTH - 1), 0, 1) :
+        clamp(((player.embeddedDepth || 0) - (CONFIG.PLAYER_H + TS)) / (TS * 2), 0, 1);
       if (depth <= 0 && player.flashTimer <= 0) return;
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.globalAlpha = depth * 0.18 + (player.flashTimer > 0 ? 0.17 : 0);
-      ctx.fillStyle = player.state === "stuck" ? "#ff5cf4" : "#4be7ff";
+      ctx.globalAlpha = depth * 0.14 + deep * 0.16 + (player.flashTimer > 0 ? 0.17 : 0);
+      ctx.fillStyle = player.state === "stuck" ? "#ff5cf4" : deep > 0.2 ? "#ffd166" : "#4be7ff";
       ctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
       ctx.restore();
     }
@@ -2424,7 +2441,7 @@
       if (player.state === "permeating") {
         message = player.permeateUntilClear ? "phasing through" : "release to rebound";
       } else if (player.state === "rebounding") {
-        message = "up, up and away!";
+        message = player.reboundStrength > 1.2 ? "deep rebound!" : "up, up and away!";
       } else if (player.state === "stuck") {
         message = "stuck";
       } else if (player.won) {

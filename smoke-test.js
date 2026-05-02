@@ -390,8 +390,8 @@ function testPermeationCenterPullUsesTunedAccel() {
   setPlayer(g, cellX(g, 11), row * g.CONFIG.TILE_SIZE - 20, "permeating");
   step(g);
 
-  assertNear(g.CONFIG.PERMEATE_PULL_ACCEL, 0.9, "permeate center pull was not retuned strongly enough");
-  assertNear(g.player.vy, 0.9, "permeate center pull did not apply the tuned acceleration");
+  assertNear(g.CONFIG.PERMEATE_PULL_ACCEL, 0.45, "permeate center pull was not dialed back");
+  assertNear(g.player.vy, 0.45, "permeate center pull did not apply the tuned acceleration");
 }
 
 function testThinMassKeepsExistingReboundCurve() {
@@ -440,6 +440,31 @@ function testDeepStaticMassRewardsBottomDive() {
   assertNear(mid.strength, 1, "old full-charge depth should not receive deep bonus yet");
   assert(deep.strength > mid.strength, "bottom dive in tall static mass did not strengthen rebound");
   assertNear(deep.strength, g.CONFIG.REBOUND_MAX_STRENGTH, "bottom dive did not reach tuned max strength");
+}
+
+function testFirstLevelDeepReboundCanReachGoalHeight() {
+  const g = makeGame();
+  g.loadLevel(0);
+
+  const deepMassCol = 55;
+  const massBottomRow = 30;
+  const bottomY = (massBottomRow + 1) * g.CONFIG.TILE_SIZE;
+  setPlayer(g, cellX(g, deepMassCol), bottomY - g.CONFIG.PLAYER_H, "permeating");
+
+  release(g, "ShiftLeft");
+  step(g);
+  assert(g.player.state === "rebounding", "first level bottom dive did not start rebound");
+
+  let reachedGoalHeight = false;
+  for (let i = 0; i < 360; i++) {
+    step(g);
+    if (g.player.y <= g.goalRect.y) {
+      reachedGoalHeight = true;
+      break;
+    }
+  }
+
+  assert(reachedGoalHeight, "first level deep rebound did not reach the goal tile height");
 }
 
 function testPermeationBottomBrakeResistsDeepSinking() {
@@ -781,6 +806,7 @@ const tests = [
   ["permeation center pull uses tuned accel", testPermeationCenterPullUsesTunedAccel],
   ["thin mass keeps existing rebound curve", testThinMassKeepsExistingReboundCurve],
   ["deep static mass rewards bottom dive", testDeepStaticMassRewardsBottomDive],
+  ["first level deep rebound can reach goal height", testFirstLevelDeepReboundCanReachGoalHeight],
   ["permeation bottom brake resists deep sinking", testPermeationBottomBrakeResistsDeepSinking],
   ["entity chars normalize geometry", testEntityCharMarkersNormalizeGeometry],
   ["repeated entity chars create clusters", testRepeatedEntityCharCreatesMultipleClusters],
