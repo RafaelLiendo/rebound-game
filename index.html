@@ -368,10 +368,6 @@
       return value === undefined ? fallback : value;
     }
 
-    function countMarker(map, marker) {
-      return map.join("").split(marker).length - 1;
-    }
-
     function isEntityChar(ch) {
       return /^[A-Za-z]$/.test(ch);
     }
@@ -476,8 +472,6 @@
           throw new Error(def.name + " row " + (r + 1) + " has " + def.map[r].length + " columns; expected " + width + ".");
         }
       }
-      if (countMarker(def.map, "0") !== 1) throw new Error(def.name + " must have exactly one spawn checkpoint 0.");
-      if (countMarker(def.map, "@") !== 1) throw new Error(def.name + " must have exactly one goal.");
     }
 
     function normalizeLevelAuthoring(def) {
@@ -488,6 +482,8 @@
       var entityCells = {};
       var checkpoints = [];
       var checkpointsByOrder = {};
+      var spawn = null;
+      var goal = null;
       (def.entities || []).forEach(function (entity, index) {
         var label = "entity " + (entity.name || index + 1);
         if (["mover", "asteroid"].indexOf(entity.kind) < 0) {
@@ -513,6 +509,10 @@
             var order = Number(ch);
             if (checkpointsByOrder[order]) throw new Error(def.name + " has duplicate checkpoint " + ch + ".");
             checkpointsByOrder[order] = { order: order, name: order === 0 ? "spawn" : "checkpoint " + ch, c: c, r: r };
+            if (order === 0) spawn = checkpointsByOrder[order];
+          } else if (ch === "@") {
+            if (goal) throw new Error(def.name + " must have exactly one goal.");
+            goal = { c: c, r: r };
           } else if (isEntityChar(ch)) {
             if (!entityCells[ch]) throw new Error(def.name + " map marker " + ch + " has no matching entity definition.");
             entityCells[ch].push({ c: c, r: r });
@@ -540,7 +540,10 @@
         }
       }
 
-      return { entities: entities, checkpoints: checkpoints };
+      if (!spawn) throw new Error(def.name + " must have exactly one spawn checkpoint 0.");
+      if (!goal) throw new Error(def.name + " must have exactly one goal.");
+
+      return { entities: entities, checkpoints: checkpoints, spawn: spawn, goal: goal };
     }
 
     function defineLevel(def) {
@@ -549,7 +552,9 @@
         name: def.name,
         map: def.map.slice(),
         entities: markers.entities,
-        checkpoints: markers.checkpoints
+        checkpoints: markers.checkpoints,
+        spawn: markers.spawn,
+        goal: markers.goal
       };
     }
 
@@ -1113,17 +1118,17 @@
       levelH = ROWS * TS;
       levelW = COLS * TS;
       tiles.length = 0;
-      spawnCell = { c: 1, r: Math.max(0, ROWS - 2), x: TS, y: Math.max(0, ROWS - 2) * TS };
-      goalRect = { x: Math.max(0, COLS - 3) * TS, y: Math.max(0, ROWS - 3) * TS, w: TS, h: TS };
       for (var r = 0; r < ROWS; r++) {
         tiles[r] = [];
         for (var c = 0; c < COLS; c++) {
           var ch = LEVEL[r][c];
           tiles[r][c] = ch === "#";
-          if (ch === "0") spawnCell = { c: c, r: r, x: c * TS, y: r * TS };
-          if (ch === "@") goalRect = { x: c * TS, y: r * TS, w: TS, h: TS };
         }
       }
+    }
+
+    function cellRect(def) {
+      return { c: def.c, r: def.r, x: def.c * TS, y: def.r * TS, w: TS, h: TS };
     }
 
     function entityFromDef(def) {
@@ -1145,7 +1150,10 @@
 
     function checkpointFromDef(def) {
       var order = def.order || 0;
-      return { order: order, name: def.name || (order === 0 ? "spawn" : "checkpoint"), c: def.c, r: def.r, x: def.c * TS, y: def.r * TS, w: TS, h: TS };
+      var rect = cellRect(def);
+      rect.order = order;
+      rect.name = def.name || (order === 0 ? "spawn" : "checkpoint");
+      return rect;
     }
 
     function updateEntityPosition(e, time) {
@@ -1174,11 +1182,18 @@
       e.y = y;
     }
 
-    function initLevelRuntime() {
+    function ensureRuntimeLevel(level) {
+      if (level && level.spawn && level.goal && level.checkpoints && level.entities) return level;
+      return defineLevel(level);
+    }
+
+    function initLevelRuntime(level) {
       levelTime = 0;
-      entities = (LEVELS[currentLevelIndex].entities || []).map(entityFromDef);
-      checkpoints = (LEVELS[currentLevelIndex].checkpoints || []).map(checkpointFromDef);
-      activeCheckpoint = checkpoints[0] || { order: 0, name: "spawn", c: spawnCell.c, r: spawnCell.r, x: spawnCell.x, y: spawnCell.y, w: TS, h: TS };
+      spawnCell = checkpointFromDef(level.spawn);
+      goalRect = cellRect(level.goal);
+      entities = (level.entities || []).map(entityFromDef);
+      checkpoints = (level.checkpoints || []).map(checkpointFromDef);
+      activeCheckpoint = checkpoints[0];
       for (var i = 0; i < entities.length; i++) {
         updateEntityPosition(entities[i], levelTime);
         entities[i].prevX = entities[i].x;
@@ -1296,9 +1311,11 @@
     function loadLevel(index) {
       var nextIndex = Math.max(0, Math.min(LEVELS.length - 1, index));
       currentLevelIndex = nextIndex;
-      LEVEL = LEVELS[currentLevelIndex].map;
+      var level = ensureRuntimeLevel(LEVELS[currentLevelIndex]);
+      LEVELS[currentLevelIndex] = level;
+      LEVEL = level.map;
       parseLevel();
-      initLevelRuntime();
+      initLevelRuntime(level);
       spawnPlayer();
     }
 

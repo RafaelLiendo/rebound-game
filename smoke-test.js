@@ -110,6 +110,8 @@ function testLoadLevelRecalculatesMap() {
 
   assert(g.currentLevelIndex === 1, "loadLevel did not update the current level index");
   assert(g.LEVEL === g.LEVELS[1].map, "loadLevel did not update the active map");
+  assert(g.LEVELS[1].spawn.c === expectedSpawn.c && g.LEVELS[1].spawn.r === expectedSpawn.r, "loaded level spawn was not normalized");
+  assert(g.LEVELS[1].goal.c === expectedGoal.c && g.LEVELS[1].goal.r === expectedGoal.r, "loaded level goal was not normalized");
   assert(g.tiles.length === g.LEVEL.length, "tiles were not rebuilt for the loaded level");
   assert(g.tiles.every((row) => row.length === g.LEVEL[0].length), "loaded level tile rows have inconsistent widths");
   assert(g.spawnCell.c === expectedSpawn.c && g.spawnCell.r === expectedSpawn.r, "loaded level spawn was not parsed");
@@ -156,6 +158,7 @@ function testCameraTracksHorizontallyInWideLevel() {
 
   try {
     g.loadLevel(originalLength);
+    assert(g.LEVELS[originalLength].spawn.c === 1 && g.LEVELS[originalLength].goal.c === 58, "raw fixture level was not normalized on load");
     assert(g.COLS === 60, "wide level columns were not parsed");
     assert(g.levelW === 60 * g.CONFIG.TILE_SIZE, "wide level width was not calculated");
 

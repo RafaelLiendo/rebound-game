@@ -58,8 +58,10 @@ There is no build step. `index.html` can be opened directly in a browser.
   the spawn checkpoint, and recovery always uses the largest checkpoint
   reached.
 - `defineLevel()` normalizes authored map markers and entity objects into the
-  runtime shape used by the simulation. Use `loadLevel(index)` rather than
-  mutating map globals directly.
+  runtime shape used by the simulation, including `spawn`, `goal`,
+  `checkpoints`, and `entities`. Keep marker parsing there; `parseLevel()`
+  should only rebuild terrain and dimensions. Use `loadLevel(index)` rather
+  than mutating map globals directly.
 - Different levels may have different row and column counts. Within a single
   level, every map row must have the same number of columns; `parseLevel()`
   throws an error for uneven row widths.
