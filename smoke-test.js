@@ -81,11 +81,160 @@ function ensureScratchWorld(g, rowCount = 50, colCount = 70) {
   g.loadLevel(index);
 }
 
-function loadFirstDesignedLevel(g) {
-  const index = g.LEVELS.findIndex((level) => !/^Bug /.test(level.name));
-  assert(index >= 0, "no non-bug authored level found");
-  g.loadLevel(index);
+const CAMPAIGN_LEVEL_NAMES = [
+  "Shadow Sink Threshold",
+  "Buried Pressure Lock",
+  "Moonwell Choir",
+  "Hanging Archive",
+  "Momentum Court",
+  "Tideworks Ferries",
+  "Open Claw Chainspire",
+  "Signal Crown Breach"
+];
+
+function campaignLevelIndex(g, name) {
+  const index = g.LEVELS.findIndex((level) => level.name === name);
+  assert(index >= 0, "campaign level not found: " + name);
   return index;
+}
+
+function loadCampaignLevel(g, name) {
+  const index = campaignLevelIndex(g, name);
+  g.loadLevel(index);
+  return g.LEVELS[index];
+}
+
+function loadTemporaryLevel(g, def) {
+  const originalLength = g.LEVELS.length;
+  const index = originalLength;
+  g.LEVELS.push(g.defineLevel(def));
+  g.loadLevel(index);
+  return { originalLength, index };
+}
+
+function restoreTemporaryLevels(g, originalLength) {
+  g.LEVELS.length = originalLength;
+  g.loadLevel(0);
+}
+
+function bugOneChainFixture() {
+  return {
+    name: "Bug 1 Chain Fixture",
+    map: [
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      ".......@..",
+      "##########",
+      "..........",
+      "##########",
+      "..........",
+      "##########",
+      "..........",
+      "##########",
+      "..........",
+      "##########",
+      "..........",
+      "##########",
+      "..........",
+      "##########",
+      "..........",
+      "##########",
+      "..........",
+      "##########",
+      "..........",
+      "##########",
+      "..........",
+      "##########",
+      "..........",
+      "##########",
+      "..........",
+      "##########",
+      "..........",
+      "##########",
+      "..........",
+      "##########",
+      "..........",
+      "##########",
+      "..........",
+      "##########",
+      "..........",
+      "##########",
+      "..........",
+      "##########",
+      "..........",
+      "##########",
+      "..........",
+      "##########",
+      "..........",
+      "...0......",
+      "##########",
+      "##########"
+    ]
+  };
+}
+
+function bugTwoTallMassFixture() {
+  return {
+    name: "Bug 2 Tall Mass Fixture",
+    map: [
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      "..........",
+      ".......@..",
+      "##########",
+      "##########",
+      "##########",
+      "##########",
+      "##########",
+      "##########",
+      "##########",
+      "##########",
+      "##########",
+      "##########",
+      "##########",
+      "##########",
+      "##########",
+      "##########",
+      "##########",
+      "##########",
+      "##########",
+      "##########",
+      "##########",
+      "##########",
+      "##########",
+      "..........",
+      "...0......",
+      "##########",
+      "##########"
+    ]
+  };
 }
 
 function setPlayer(g, x, y, state = "solid") {
@@ -510,8 +659,20 @@ function testAuthoredLevelsHaveValidMarkersAndStarts() {
     assert(g.player.state === "solid", "level " + (index + 1) + " did not spawn solid");
     assert(g.overlappingSolidTiles(g.playerRect()).length === 0, "level " + (index + 1) + " spawns inside terrain");
     assert(g.player.grounded === true, "level " + (index + 1) + " spawn is not grounded");
-    assert(g.goalRect.y < g.spawnCell.y, "level " + (index + 1) + " goal is not above the spawn");
+    assert(
+      g.goalRect.x !== g.spawnCell.x || g.goalRect.y !== g.spawnCell.y,
+      "level " + (index + 1) + " goal overlaps the spawn"
+    );
   });
+}
+
+function testPlayableCampaignIsRedesignedLevelSet() {
+  const g = makeGame();
+  assert(g.LEVELS.length === CAMPAIGN_LEVEL_NAMES.length, "playable campaign should have exactly 8 levels");
+  for (let i = 0; i < CAMPAIGN_LEVEL_NAMES.length; i++) {
+    assert(g.LEVELS[i].name === CAMPAIGN_LEVEL_NAMES[i], "level " + (i + 1) + " should be " + CAMPAIGN_LEVEL_NAMES[i]);
+    assert(!/^Bug /.test(g.LEVELS[i].name), "bug regression fixture leaked into playable campaign");
+  }
 }
 
 const LEVEL_REACH_LIMITS = {
@@ -795,6 +956,112 @@ function testAuthoredLevelsAreReachableWithinPlayerLimits() {
   });
 }
 
+function testBuriedPressureLockFiveRowPassThroughGate() {
+  const g = makeGame();
+  loadCampaignLevel(g, "Buried Pressure Lock");
+
+  function passesSealFromFall(fallTiles) {
+    const sealTopRow = 10;
+    const sealBottomY = 15 * g.CONFIG.TILE_SIZE;
+    setPlayer(
+      g,
+      cellX(g, 24),
+      sealTopRow * g.CONFIG.TILE_SIZE - fallTiles * g.CONFIG.TILE_SIZE - g.CONFIG.PLAYER_H,
+      "permeating"
+    );
+    g.keys.ShiftLeft = true;
+    for (let i = 0; i < 240; i++) {
+      step(g);
+      if (g.player.y > sealBottomY && g.overlappingSolidTiles(g.playerRect()).length === 0) return true;
+    }
+    return false;
+  }
+
+  assert(!passesSealFromFall(4), "Buried Pressure Lock seal can be bypassed without the intended high dive");
+  assert(passesSealFromFall(5.5), "Buried Pressure Lock 5-row seal did not allow a tuned high-dive pass-through");
+}
+
+function testMoonwellChoirContainsPlayableChainStack() {
+  const g = makeGame();
+  const level = loadCampaignLevel(g, "Moonwell Choir");
+  const chainRows = [53, 51, 49, 46];
+  for (const row of chainRows) {
+    for (let c = 14; c <= 16; c++) {
+      assert(tileAt(level, row, c) === "#", "Moonwell Choir missing chain slab at row " + row);
+    }
+  }
+  assert(chainRows[0] - chainRows[1] - 1 === 1, "Moonwell Choir first chain gap should be 1 row");
+  assert(chainRows[1] - chainRows[2] - 1 === 1, "Moonwell Choir second chain gap should be 1 row");
+  assert(chainRows[2] - chainRows[3] - 1 === 2, "Moonwell Choir speed-check chain gap should be 2 rows");
+
+  setPlayer(g, cellX(g, 15), standY(g, 56), "solid");
+  press(g, "ShiftLeft");
+  step(g, 60);
+  press(g, "ControlLeft");
+
+  const touchedRows = new Set();
+  for (let i = 0; i < 720; i++) {
+    step(g);
+    for (const t of g.overlappingSolidTiles(g.playerRect())) touchedRows.add(t.r);
+    if (g.player.y < 46 * g.CONFIG.TILE_SIZE - g.CONFIG.PLAYER_H) break;
+  }
+
+  for (const row of chainRows.slice(0, 3)) {
+    assert(touchedRows.has(row), "Moonwell Choir auto-chain skipped slab row " + row);
+  }
+}
+
+function testHangingArchiveContainsCeilingHangRoute() {
+  const g = makeGame();
+  const level = loadCampaignLevel(g, "Hanging Archive");
+  for (let c = 32; c <= 38; c++) {
+    assert(tileAt(level, 29, c) === "#", "Hanging Archive missing 2-row ceiling at c" + c);
+    assert(tileAt(level, 32, c) === "#", "Hanging Archive missing floor below 2-row ceiling at c" + c);
+  }
+  for (let c = 56; c <= 62; c++) {
+    assert(tileAt(level, 21, c) === "#", "Hanging Archive missing 3-row ceiling at c" + c);
+    assert(tileAt(level, 25, c) === "#", "Hanging Archive missing floor below 3-row ceiling at c" + c);
+  }
+  assert(measureCeilingHangGap(g, 2).reachable === true, "2-row ceiling hang gap should remain reachable");
+  assert(measureCeilingHangGap(g, 3).reachable === true, "3-row ceiling hang gap should remain reachable");
+}
+
+function findSurfaceNodeAt(level, row, col) {
+  const nodes = surfaceNodesForLevel(level);
+  const node = nodes.find((n) => n.r === row && nodeContainsColumn(n, col));
+  assert(node, "surface node not found at row " + row + " col " + col + " in " + level.name);
+  return node;
+}
+
+function testMomentumCourtUsesBoostOnlyGaps() {
+  const g = makeGame();
+  const level = loadCampaignLevel(g, "Momentum Court");
+  const moves = [
+    { from: findSurfaceNodeAt(level, 42, 20), to: findSurfaceNodeAt(level, 35, 33), rows: 3 },
+    { from: findSurfaceNodeAt(level, 31, 46), to: findSurfaceNodeAt(level, 19, 62), rows: 4 },
+    { from: findSurfaceNodeAt(level, 30, 76), to: findSurfaceNodeAt(level, 9, 91), rows: 5 }
+  ];
+
+  for (const entry of moves) {
+    const move = movementAnalysis(g, entry.from, entry.to);
+    assert(move.mode === "rebound", "Momentum Court route should require rebound movement");
+    assert(move.ok, "Momentum Court " + entry.rows + "-row rebound move exceeds measured limits");
+    assert(move.gapTiles > LEVEL_REACH_LIMITS.normalJumpTiles, "Momentum Court rebound gap is too small to teach boosted horizontal shaping");
+  }
+}
+
+function testMoverLevelsExposeExpectedRuntimeSurfaces() {
+  const g = makeGame();
+  const tideworks = loadCampaignLevel(g, "Tideworks Ferries");
+  assert(tideworks.entities.some((e) => e.type === "mover" && e.role === "platform" && e.w === 5 && e.h === 1), "Tideworks Ferries missing 5x1 platform ferry");
+  assert(tideworks.entities.some((e) => e.type === "mover" && e.role === "rebound" && e.w === 4 && e.h === 3), "Tideworks Ferries missing 4x3 vertical rebound mass");
+  assert(tideworks.entities.some((e) => e.type === "mover" && e.role === "rebound" && e.w === 5 && e.h === 3), "Tideworks Ferries missing 5x3 horizontal rebound ferry");
+
+  const finale = loadCampaignLevel(g, "Signal Crown Breach");
+  assert(finale.entities.length === 3, "Signal Crown Breach should expose three moving entities");
+  assert(finale.entities.some((e) => e.path === "circle" && e.role === "rebound"), "Signal Crown Breach missing circular rebound mass");
+}
+
 function testCameraTracksHorizontallyInWideLevel() {
   const g = makeGame();
   const originalLength = g.LEVELS.length;
@@ -914,80 +1181,89 @@ function testFinalLevelDoesNotAdvancePastEnd() {
 
 function testBugOneAutoChainReachesTop() {
   const g = makeGame();
-  g.loadLevel(0);
-  setPlayer(g, cellX(g, 7), standY(g, 60), "solid");
+  const temp = loadTemporaryLevel(g, bugOneChainFixture());
 
-  press(g, "ShiftLeft");
-  step(g, 60);
-  press(g, "ControlLeft");
+  try {
+    setPlayer(g, cellX(g, 7), standY(g, 60), "solid");
 
-  let chainStarted = false;
-  const chainExits = [];
-  let previousState = g.player.state;
-  for (let i = 0; i < 2400; i++) {
-    step(g);
-    if (previousState === "rebounding" && g.player.state === "permeating") {
-      chainExits.push({
-        speed: g.player.vy,
-        launch: g.player.reboundLaunchVelocity,
-        target: g.player.reboundTargetRiseTiles
-      });
-    }
-    previousState = g.player.state;
-    if (g.player.state === "permeating" || g.player.state === "rebounding") chainStarted = true;
-    assert(g.player.state !== "stuck", "bug 1 chain entered stuck recovery");
-    assert(!chainStarted || g.player.state !== "solid", "bug 1 chain became solid before reaching the top");
-    if (g.player.won) {
-      assert(chainExits.length >= 4, "bug 1 chain did not record enough rebound exits");
-      for (let j = 0; j < Math.min(4, chainExits.length); j++) {
-        assert(chainExits[j].target >= 1, "bug 1 chain exit " + j + " lost its rebound target");
-        assert(
-          chainExits[j].speed <= -chainExits[j].launch + 0.001,
-          "bug 1 chain exit " + j + " velocity collapsed to " + chainExits[j].speed.toFixed(3) +
-            " below launch " + chainExits[j].launch.toFixed(3)
-        );
+    press(g, "ShiftLeft");
+    step(g, 60);
+    press(g, "ControlLeft");
+
+    let chainStarted = false;
+    const chainExits = [];
+    let previousState = g.player.state;
+    for (let i = 0; i < 2400; i++) {
+      step(g);
+      if (previousState === "rebounding" && g.player.state === "permeating") {
+        chainExits.push({
+          speed: g.player.vy,
+          launch: g.player.reboundLaunchVelocity,
+          target: g.player.reboundTargetRiseTiles
+        });
       }
-      return;
+      previousState = g.player.state;
+      if (g.player.state === "permeating" || g.player.state === "rebounding") chainStarted = true;
+      assert(g.player.state !== "stuck", "bug 1 chain entered stuck recovery");
+      assert(!chainStarted || g.player.state !== "solid", "bug 1 chain became solid before reaching the top");
+      if (g.player.won) {
+        assert(chainExits.length >= 4, "bug 1 chain did not record enough rebound exits");
+        for (let j = 0; j < Math.min(4, chainExits.length); j++) {
+          assert(chainExits[j].target >= 1, "bug 1 chain exit " + j + " lost its rebound target");
+          assert(
+            chainExits[j].speed <= -chainExits[j].launch + 0.001,
+            "bug 1 chain exit " + j + " velocity collapsed to " + chainExits[j].speed.toFixed(3) +
+              " below launch " + chainExits[j].launch.toFixed(3)
+          );
+        }
+        return;
+      }
     }
-  }
 
-  throw new Error("bug 1 auto-chain did not reach the top goal");
+    throw new Error("bug 1 auto-chain did not reach the top goal");
+  } finally {
+    restoreTemporaryLevels(g, temp.originalLength);
+  }
 }
 
 function testBugTwoTallMassReboundsOnce() {
   const g = makeGame();
-  g.loadLevel(1);
-  g.goalRect.x = -1000;
-  g.goalRect.y = -1000;
+  const temp = loadTemporaryLevel(g, bugTwoTallMassFixture());
 
-  const massTopRow = 17;
-  const massBottomRow = 37;
-  const bottomY = (massBottomRow + 1) * g.CONFIG.TILE_SIZE;
-  for (const mode of ["release", "ctrl+shift"]) {
-    setPlayer(g, cellX(g, 7), bottomY - g.CONFIG.PLAYER_H, "permeating");
+  try {
+    g.goalRect.x = -1000;
+    g.goalRect.y = -1000;
 
-    const rebound = g.shouldRebound(g.playerRect());
-    assert(rebound.fire === true, "bug 2 tall mass did not allow " + mode + " rebound");
-    assertApprox(rebound.targetRiseTiles, 21, 0.001, "bug 2 tall mass did not use capped 5-row " + mode + " rebound tuning");
+    const massBottomRow = 37;
+    const bottomY = (massBottomRow + 1) * g.CONFIG.TILE_SIZE;
+    for (const mode of ["release", "ctrl+shift"]) {
+      setPlayer(g, cellX(g, 7), bottomY - g.CONFIG.PLAYER_H, "permeating");
 
-    activateRebound(g, mode);
-    let reboundStarts = g.player.state === "rebounding" ? 1 : 0;
-    let exited = false;
-    let peakY = Infinity;
-    let previousState = g.player.state;
-    for (let i = 0; i < 900; i++) {
-      step(g);
-      if (previousState !== "rebounding" && g.player.state === "rebounding") reboundStarts++;
-      previousState = g.player.state;
-      assert(g.player.state !== "stuck", "bug 2 " + mode + " tall mass entered stuck recovery");
-      if (!exited && g.player.y <= rebound.exitY + 0.001) exited = true;
-      if (exited) peakY = Math.min(peakY, g.player.y);
-      if (exited && g.player.vy > 0 && g.player.y > peakY + 5) break;
+      const rebound = g.shouldRebound(g.playerRect());
+      assert(rebound.fire === true, "bug 2 tall mass did not allow " + mode + " rebound");
+      assertApprox(rebound.targetRiseTiles, 21, 0.001, "bug 2 tall mass did not use capped 5-row " + mode + " rebound tuning");
+
+      activateRebound(g, mode);
+      let reboundStarts = g.player.state === "rebounding" ? 1 : 0;
+      let exited = false;
+      let peakY = Infinity;
+      let previousState = g.player.state;
+      for (let i = 0; i < 900; i++) {
+        step(g);
+        if (previousState !== "rebounding" && g.player.state === "rebounding") reboundStarts++;
+        previousState = g.player.state;
+        assert(g.player.state !== "stuck", "bug 2 " + mode + " tall mass entered stuck recovery");
+        if (!exited && g.player.y <= rebound.exitY + 0.001) exited = true;
+        if (exited) peakY = Math.min(peakY, g.player.y);
+        if (exited && g.player.vy > 0 && g.player.y > peakY + 5) break;
+      }
+
+      assert(exited, "bug 2 " + mode + " tall mass rebound did not reach its planned exit");
+      assert(reboundStarts === 1, "bug 2 " + mode + " tall mass rebounded " + reboundStarts + " times instead of once");
+      assertApprox(tilesFromPixels(g, rebound.exitY - peakY), 21, 0.05, "bug 2 " + mode + " bottom rebound did not rise 21 tiles from the top exit");
     }
-
-    assert(exited, "bug 2 " + mode + " tall mass rebound did not reach its planned exit");
-    assert(reboundStarts === 1, "bug 2 " + mode + " tall mass rebounded " + reboundStarts + " times instead of once");
-    assertApprox(tilesFromPixels(g, rebound.exitY - peakY), 21, 0.05, "bug 2 " + mode + " bottom rebound did not rise 21 tiles from the top exit");
+  } finally {
+    restoreTemporaryLevels(g, temp.originalLength);
   }
 }
 
@@ -1077,133 +1353,148 @@ function testManualQueueConsumesOnSurface() {
 
 function testManualTapChainKeepsQueuedPermeation() {
   const g = makeGame();
-  g.loadLevel(0);
-  setPlayer(g, cellX(g, 7), standY(g, 60), "solid");
+  const temp = loadTemporaryLevel(g, bugOneChainFixture());
 
-  press(g, "ShiftLeft");
-  step(g, 60);
-  assert(g.overlappingSolidTiles(g.playerRect()).length > 0, "manual tap chain never entered the first mass");
-  release(g, "ShiftLeft");
-  step(g);
-  assert(g.player.state === "rebounding", "manual tap chain did not start the first rebound");
+  try {
+    setPlayer(g, cellX(g, 7), standY(g, 60), "solid");
 
-  let releaseTapNext = false;
-  let chainStarted = true;
-  let reboundStarts = 1;
-  let previousState = g.player.state;
-
-  for (let i = 0; i < 2400; i++) {
-    if (releaseTapNext) {
-      release(g, "ShiftLeft");
-      releaseTapNext = false;
-    } else if (g.player.state === "rebounding" && !g.player.queuedPermeate) {
-      press(g, "ShiftLeft");
-      releaseTapNext = true;
-    } else if (
-      g.player.state === "permeating" &&
-      !g.player.permeateUntilClear &&
-      g.overlappingMatter(g.playerRect()).length > 0
-    ) {
-      press(g, "ShiftLeft");
-      releaseTapNext = true;
-    }
-
+    press(g, "ShiftLeft");
+    step(g, 60);
+    assert(g.overlappingSolidTiles(g.playerRect()).length > 0, "manual tap chain never entered the first mass");
+    release(g, "ShiftLeft");
     step(g);
+    assert(g.player.state === "rebounding", "manual tap chain did not start the first rebound");
 
-    if (previousState !== "rebounding" && g.player.state === "rebounding") reboundStarts++;
-    previousState = g.player.state;
-    if (g.player.state === "permeating" || g.player.state === "rebounding") chainStarted = true;
+    let releaseTapNext = false;
+    let chainStarted = true;
+    let reboundStarts = 1;
+    let previousState = g.player.state;
 
-    assert(g.player.state !== "stuck", "manual tap chain entered stuck recovery");
-    assert(!chainStarted || g.player.state !== "solid", "manual tap chain became solid before reaching the top");
-    assert(g.player.stuckTimer === 0, "manual tap chain armed stuck respawn");
+    for (let i = 0; i < 2400; i++) {
+      if (releaseTapNext) {
+        release(g, "ShiftLeft");
+        releaseTapNext = false;
+      } else if (g.player.state === "rebounding" && !g.player.queuedPermeate) {
+        press(g, "ShiftLeft");
+        releaseTapNext = true;
+      } else if (
+        g.player.state === "permeating" &&
+        !g.player.permeateUntilClear &&
+        g.overlappingMatter(g.playerRect()).length > 0
+      ) {
+        press(g, "ShiftLeft");
+        releaseTapNext = true;
+      }
 
-    if (g.player.won) {
-      assert(reboundStarts >= 4, "manual tap chain did not perform enough rebounds");
-      return;
+      step(g);
+
+      if (previousState !== "rebounding" && g.player.state === "rebounding") reboundStarts++;
+      previousState = g.player.state;
+      if (g.player.state === "permeating" || g.player.state === "rebounding") chainStarted = true;
+
+      assert(g.player.state !== "stuck", "manual tap chain entered stuck recovery");
+      assert(!chainStarted || g.player.state !== "solid", "manual tap chain became solid before reaching the top");
+      assert(g.player.stuckTimer === 0, "manual tap chain armed stuck respawn");
+
+      if (g.player.won) {
+        assert(reboundStarts >= 4, "manual tap chain did not perform enough rebounds");
+        return;
+      }
     }
-  }
 
-  throw new Error("manual tap chain did not reach the top goal");
+    throw new Error("manual tap chain did not reach the top goal");
+  } finally {
+    restoreTemporaryLevels(g, temp.originalLength);
+  }
 }
 
 function testManualRhythmChainCompletesFirstLevelWithoutCtrl() {
   const g = makeGame();
-  g.loadLevel(0);
-  setPlayer(g, cellX(g, 7), standY(g, 60), "solid");
+  const temp = loadTemporaryLevel(g, bugOneChainFixture());
 
-  press(g, "ShiftLeft");
-  step(g, 60);
-  assert(g.overlappingSolidTiles(g.playerRect()).length > 0, "manual rhythm chain never entered the first mass");
-  release(g, "ShiftLeft");
-  step(g);
-  assert(g.player.state === "rebounding", "manual rhythm chain did not start the first rebound");
+  try {
+    setPlayer(g, cellX(g, 7), standY(g, 60), "solid");
 
-  const tapPeriod = 45;
-  const tapWidth = 6;
-  let reboundStarts = 1;
-  let previousState = g.player.state;
-  let chainStarted = true;
-
-  for (let i = 0; i < 2400; i++) {
-    const phase = i % tapPeriod;
-    if (phase === 0) press(g, "ShiftLeft");
-    if (phase === tapWidth) release(g, "ShiftLeft");
-
-    assert(g.keys.ControlLeft !== true && g.keys.ControlRight !== true, "manual rhythm chain used Ctrl");
+    press(g, "ShiftLeft");
+    step(g, 60);
+    assert(g.overlappingSolidTiles(g.playerRect()).length > 0, "manual rhythm chain never entered the first mass");
+    release(g, "ShiftLeft");
     step(g);
+    assert(g.player.state === "rebounding", "manual rhythm chain did not start the first rebound");
 
-    if (previousState !== "rebounding" && g.player.state === "rebounding") reboundStarts++;
-    previousState = g.player.state;
-    if (g.player.state === "permeating" || g.player.state === "rebounding") chainStarted = true;
+    const tapPeriod = 45;
+    const tapWidth = 6;
+    let reboundStarts = 1;
+    let previousState = g.player.state;
+    let chainStarted = true;
 
-    assert(g.keys.ControlLeft !== true && g.keys.ControlRight !== true, "manual rhythm chain held Ctrl after stepping");
-    assert(g.player.state !== "stuck", "manual rhythm chain entered stuck recovery");
-    assert(!chainStarted || g.player.state !== "solid", "manual rhythm chain became solid before reaching the top");
-    assert(g.player.stuckTimer === 0, "manual rhythm chain armed stuck respawn");
+    for (let i = 0; i < 2400; i++) {
+      const phase = i % tapPeriod;
+      if (phase === 0) press(g, "ShiftLeft");
+      if (phase === tapWidth) release(g, "ShiftLeft");
 
-    if (g.player.won) {
-      assert(reboundStarts >= 4, "manual rhythm chain did not perform enough rebounds");
-      return;
+      assert(g.keys.ControlLeft !== true && g.keys.ControlRight !== true, "manual rhythm chain used Ctrl");
+      step(g);
+
+      if (previousState !== "rebounding" && g.player.state === "rebounding") reboundStarts++;
+      previousState = g.player.state;
+      if (g.player.state === "permeating" || g.player.state === "rebounding") chainStarted = true;
+
+      assert(g.keys.ControlLeft !== true && g.keys.ControlRight !== true, "manual rhythm chain held Ctrl after stepping");
+      assert(g.player.state !== "stuck", "manual rhythm chain entered stuck recovery");
+      assert(!chainStarted || g.player.state !== "solid", "manual rhythm chain became solid before reaching the top");
+      assert(g.player.stuckTimer === 0, "manual rhythm chain armed stuck respawn");
+
+      if (g.player.won) {
+        assert(reboundStarts >= 4, "manual rhythm chain did not perform enough rebounds");
+        return;
+      }
     }
-  }
 
-  throw new Error("manual rhythm chain did not reach the first-level goal without Ctrl");
+    throw new Error("manual rhythm chain did not reach the first-level goal without Ctrl");
+  } finally {
+    restoreTemporaryLevels(g, temp.originalLength);
+  }
 }
 
 function testManualChainCompletesFirstLevelWithoutFurtherInput() {
   const g = makeGame();
-  g.loadLevel(0);
-  setPlayer(g, cellX(g, 7), standY(g, 60), "solid");
+  const temp = loadTemporaryLevel(g, bugOneChainFixture());
 
-  press(g, "ShiftLeft");
-  step(g, 60);
-  assert(g.overlappingSolidTiles(g.playerRect()).length > 0, "manual no-input chain never entered the first mass");
-  release(g, "ShiftLeft");
-  step(g);
-  assert(g.player.state === "rebounding", "manual no-input chain did not start the first rebound");
+  try {
+    setPlayer(g, cellX(g, 7), standY(g, 60), "solid");
 
-  let reboundStarts = 1;
-  let previousState = g.player.state;
-  let chainStarted = true;
-  for (let i = 0; i < 2400; i++) {
-    assert(g.keys.ControlLeft !== true && g.keys.ControlRight !== true, "manual no-input chain used Ctrl");
-    assert(g.keys.ShiftLeft !== true && g.keys.ShiftRight !== true, "manual no-input chain kept Shift held");
+    press(g, "ShiftLeft");
+    step(g, 60);
+    assert(g.overlappingSolidTiles(g.playerRect()).length > 0, "manual no-input chain never entered the first mass");
+    release(g, "ShiftLeft");
     step(g);
-    if (previousState !== "rebounding" && g.player.state === "rebounding") reboundStarts++;
-    previousState = g.player.state;
-    if (g.player.state === "permeating" || g.player.state === "rebounding") chainStarted = true;
+    assert(g.player.state === "rebounding", "manual no-input chain did not start the first rebound");
 
-    assert(g.player.state !== "stuck", "manual no-input chain entered stuck recovery");
-    assert(!chainStarted || g.player.state !== "solid", "manual no-input chain became solid before fully exiting");
+    let reboundStarts = 1;
+    let previousState = g.player.state;
+    let chainStarted = true;
+    for (let i = 0; i < 2400; i++) {
+      assert(g.keys.ControlLeft !== true && g.keys.ControlRight !== true, "manual no-input chain used Ctrl");
+      assert(g.keys.ShiftLeft !== true && g.keys.ShiftRight !== true, "manual no-input chain kept Shift held");
+      step(g);
+      if (previousState !== "rebounding" && g.player.state === "rebounding") reboundStarts++;
+      previousState = g.player.state;
+      if (g.player.state === "permeating" || g.player.state === "rebounding") chainStarted = true;
 
-    if (g.player.won) {
-      assert(reboundStarts >= 4, "manual no-input chain did not perform enough rebounds");
-      return;
+      assert(g.player.state !== "stuck", "manual no-input chain entered stuck recovery");
+      assert(!chainStarted || g.player.state !== "solid", "manual no-input chain became solid before fully exiting");
+
+      if (g.player.won) {
+        assert(reboundStarts >= 4, "manual no-input chain did not perform enough rebounds");
+        return;
+      }
     }
-  }
 
-  throw new Error("manual no-input chain did not reach the first-level goal");
+    throw new Error("manual no-input chain did not reach the first-level goal");
+  } finally {
+    restoreTemporaryLevels(g, temp.originalLength);
+  }
 }
 
 function testReboundHorizontalBoostScalesMovement() {
@@ -1535,19 +1826,20 @@ function testTallStaticMassReboundsFromExit() {
   }
 }
 
-function testFirstLevelDeepReboundCanReachGoalHeight() {
+function testMomentumCourtFiveRowReboundUsesCappedTarget() {
   const g = makeGame();
-  loadFirstDesignedLevel(g);
+  loadCampaignLevel(g, "Momentum Court");
 
-  const deepMassCol = 55;
-  const massBottomRow = 30;
+  const deepMassCol = 77;
+  const massBottomRow = 34;
   const bottomY = (massBottomRow + 1) * g.CONFIG.TILE_SIZE;
   for (const mode of ["release", "ctrl+shift"]) {
     setPlayer(g, cellX(g, deepMassCol), bottomY - g.CONFIG.PLAYER_H, "permeating");
     const target = g.shouldRebound(g.playerRect()).targetRiseTiles;
+    assertApprox(target, 21, 0.001, "Momentum Court five-row mass did not use capped rebound tuning");
 
     const measured = measureCurrentReboundPeakFromExit(g, 480, mode);
-    assertApprox(measured.riseTiles, target, 0.05, "first level deep " + mode + " rebound did not follow its exit-relative target height");
+    assertApprox(measured.riseTiles, target, 0.05, "Momentum Court five-row " + mode + " rebound did not follow its exit-relative target height");
   }
 }
 
@@ -2213,7 +2505,13 @@ function testAsteroidImpactRecoversToCheckpoint() {
 const tests = [
   ["load level recalculates map", testLoadLevelRecalculatesMap],
   ["authored levels have valid starts", testAuthoredLevelsHaveValidMarkersAndStarts],
+  ["playable campaign is redesigned level set", testPlayableCampaignIsRedesignedLevelSet],
   ["authored levels are reachable within player limits", testAuthoredLevelsAreReachableWithinPlayerLimits],
+  ["Buried Pressure Lock uses five-row pass-through gate", testBuriedPressureLockFiveRowPassThroughGate],
+  ["Moonwell Choir contains playable chain stack", testMoonwellChoirContainsPlayableChainStack],
+  ["Hanging Archive contains ceiling-hang route", testHangingArchiveContainsCeilingHangRoute],
+  ["Momentum Court uses boost-only rebound gaps", testMomentumCourtUsesBoostOnlyGaps],
+  ["mover levels expose expected runtime surfaces", testMoverLevelsExposeExpectedRuntimeSurfaces],
   ["camera tracks horizontally in wide levels", testCameraTracksHorizontallyInWideLevel],
   ["load level rejects uneven rows", testLoadLevelRejectsUnevenRows],
   ["reset respawns at active checkpoint", testResetRespawnsAtActiveCheckpoint],
@@ -2224,8 +2522,8 @@ const tests = [
   ["auto assist climbs tuned thick stack", testAutoAssistClimbsTunedThickStack],
   ["manual queue consumes on surface", testManualQueueConsumesOnSurface],
   ["manual tap chain keeps queued permeation", testManualTapChainKeepsQueuedPermeation],
-  ["manual rhythm chain completes first level without Ctrl", testManualRhythmChainCompletesFirstLevelWithoutCtrl],
-  ["manual chain completes first level without further input", testManualChainCompletesFirstLevelWithoutFurtherInput],
+  ["manual rhythm chain completes bug fixture without Ctrl", testManualRhythmChainCompletesFirstLevelWithoutCtrl],
+  ["manual chain completes bug fixture without further input", testManualChainCompletesFirstLevelWithoutFurtherInput],
   ["rebound horizontal boost scales movement", testReboundHorizontalBoostScalesMovement],
   ["Ctrl chain rebounds keep horizontal boost", testCtrlChainReboundsKeepHorizontalBoost],
   ["upper-body-only release waits until clear", testUpperBodyOnlyReleaseDoesNotRebound],
@@ -2237,7 +2535,7 @@ const tests = [
   ["thin mass keeps existing rebound curve", testThinMassKeepsExistingReboundCurve],
   ["deep static mass rewards bottom dive", testDeepStaticMassRewardsBottomDive],
   ["tall static mass rebounds from planned exit", testTallStaticMassReboundsFromExit],
-  ["first level deep rebound can reach goal height", testFirstLevelDeepReboundCanReachGoalHeight],
+  ["Momentum Court five-row rebound uses capped target", testMomentumCourtFiveRowReboundUsesCappedTarget],
   ["permeation bottom brake resists deep sinking", testPermeationBottomBrakeResistsDeepSinking],
   ["short fall does not accidentally permeate through thin mass", testShortFallDoesNotAccidentallyPermeateThroughThinMass],
   ["high fall can permeate through thin mass", testHighFallCanPermeateThroughThinMass],
