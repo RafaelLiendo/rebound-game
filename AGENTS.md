@@ -104,6 +104,10 @@ There is no build step. `index.html` can be opened directly in a browser.
   player's vertical lane, the player should stay in permeating/rebounding
   rather than becoming `solid` or `stuck`. Keep this limited to shallow
   slab-ladder style chains so deep blocked upward escapes still enter `stuck`.
+  Manual queued permeation should record this chain intent when Shift is
+  pressed during `rebounding`, so a held-Shift queue can pull through a
+  top-half-only ceiling overlap into the next rebound without a surfacing-time
+  special case.
 - Rebound horizontal boost is separate from vertical launch tuning: while
   `reboundMoveBoostActive()` is true, left/right movement uses
   `REBOUND_HORIZONTAL_MULTIPLIER` (currently 1.5x). Keep this derived from the
@@ -175,6 +179,8 @@ Add smoke coverage when changing:
 - rebound/stuck behavior
 - shallow manual chain-lock behavior, including no-input completion of the
   first stacked chain and preservation of blocked-escape `stuck` recovery
+- held-Shift manual chain behavior, including queued permeation through a
+  top-half-only ceiling overlap without preserving auto-chain boost
 - rebound horizontal boost behavior, including the active window, speed cap,
   apex cleanup, and Ctrl+Shift chain handoff
 - permeation momentum, including short-fall catch behavior and high-fall
