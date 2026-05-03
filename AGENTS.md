@@ -107,6 +107,15 @@ There is no build step. `index.html` can be opened directly in a browser.
   by drag, center pull, and bottom brake, while falls that meet the tuned tile
   threshold should carry through. Keep max-speed entry through static matter
   aligned with the player limit measurement tests.
+- Top-half-only permeation is intentional ceiling-hang behavior: when the
+  player is permeating with only the upper body inside matter, they should hang
+  without gravity or center pull unless the player opts in. Keep this modeled
+  through `ceilingHangInfo()` and the single `player.ceilingPullMode` value
+  (`null`, `"space"`, or `"assist"`) rather than separate booleans. Space
+  latches center pull until normal lower-body permeation begins; Ctrl pulls
+  toward center and rebounds only once the lower half is fully inside matter.
+  Do not let the hang catch intentional pass-through dives that meet
+  `isPassThroughDive()`.
 
 ## Gameplay Expectations
 
@@ -119,6 +128,10 @@ Maintain the feel described in `Plan.md`:
 - Deep releases near the bottom of taller solid matter should produce a
   noticeably stronger, visually distinct rebound.
 - Upper-body-only release should phase clear without firing a rebound.
+- Top-half-only permeation should be a stable ceiling hang with no input.
+  Space should latch center pull without automatically rebounding, while Ctrl
+  should pull inward and trigger the normal target-based rebound only after the
+  lower half is fully embedded.
 - Blocked upward escape should enter `stuck` briefly and recover cleanly.
 - Manual and assisted chain rebound should remain responsive.
 - Reset with `R` should respawn at the largest checkpoint reached in the
@@ -141,6 +154,9 @@ Add smoke coverage when changing:
 - rebound/stuck behavior
 - permeation momentum, including short-fall catch behavior and high-fall
   pass-through behavior
+- ceiling-hang behavior, including no-input stability, Space-latched center
+  pull, Ctrl delayed rebound, and pass-through dives not being caught by the
+  hang
 - player limit tuning, including normal jump height, terminal fall distance,
   rebound target heights, minimum pass-through fall heights, and max-speed
   pass-through thickness

@@ -105,8 +105,7 @@ function setPlayer(g, x, y, state = "solid") {
   p.queuedPermeateSource = null;
   p.permeateUntilClear = false;
   p.permeateStartFeetY = state === "permeating" ? y + g.CONFIG.PLAYER_H : null;
-  p.ceilingPullLatched = false;
-  p.ceilingAssistActive = false;
+  p.ceilingPullMode = null;
   p.embeddedDepth = 0;
   p.reboundMeterLevel = 0;
   p.reboundStrength = 0;
@@ -1065,7 +1064,7 @@ function testCeilingHangSpaceLatchesCenterPull() {
   step(g);
   release(g, "Space");
 
-  assert(g.player.ceilingPullLatched === true, "Space did not latch ceiling-hang pull");
+  assert(g.player.ceilingPullMode === "space", "Space did not latch ceiling-hang pull");
   assert(g.player.jumpBufferTimer === 0, "Space ceiling pull left a jump buffered");
   assert(g.player.y < fixture.startY, "Space ceiling pull did not move toward the mass center");
   assert(g.player.state === "permeating", "Space ceiling pull changed state immediately");
@@ -1082,7 +1081,7 @@ function testCeilingHangSpaceLatchesCenterPull() {
 
   assert(lowerEntered, "Space ceiling pull never reached normal lower-body permeation");
   step(g);
-  assert(g.player.ceilingPullLatched === false, "Space ceiling pull did not clear after lower-body matter overlap");
+  assert(g.player.ceilingPullMode === null, "Space ceiling pull did not clear after lower-body matter overlap");
   assert(g.player.state === "permeating", "Space ceiling pull did not remain in normal permeation");
 }
 
@@ -1093,7 +1092,7 @@ function testCeilingHangCtrlPullsThenReboundsWhenFullyInside() {
   press(g, "ControlLeft");
   step(g);
 
-  assert(g.player.ceilingAssistActive === true, "Ctrl did not arm ceiling-hang assist");
+  assert(g.player.ceilingPullMode === "assist", "Ctrl did not arm ceiling-hang assist");
   assert(g.player.y < fixture.startY, "Ctrl ceiling assist did not pull toward the mass center");
   assert(g.player.state === "permeating", "Ctrl ceiling assist rebounded before lower-body entry");
 
