@@ -105,6 +105,7 @@ function setPlayer(g, x, y, state = "solid") {
   p.queuedPermeateSource = null;
   p.manualReboundQueued = false;
   p.manualChainTimer = 0;
+  p.manualChainGraceTimer = 0;
   p.permeateUntilClear = false;
   p.permeateStartFeetY = state === "permeating" ? y + g.CONFIG.PLAYER_H : null;
   p.ceilingPullMode = null;
@@ -116,6 +117,7 @@ function setPlayer(g, x, y, state = "solid") {
   p.reboundExitY = null;
   p.reboundEntity = null;
   p.reboundIgnoreEntity = null;
+  p.reboundSource = null;
   p.stuckTimer = 0;
   p.flashTimer = 0;
   g.probeGrounded();
@@ -1066,8 +1068,8 @@ function testManualRhythmChainCompletesFirstLevelWithoutCtrl() {
   step(g);
   assert(g.player.state === "rebounding", "manual rhythm chain did not start the first rebound");
 
-  const tapPeriod = 8;
-  const tapWidth = 2;
+  const tapPeriod = 45;
+  const tapWidth = 6;
   let reboundStarts = 1;
   let previousState = g.player.state;
   let chainStarted = true;
@@ -1096,6 +1098,33 @@ function testManualRhythmChainCompletesFirstLevelWithoutCtrl() {
   }
 
   throw new Error("manual rhythm chain did not reach the first-level goal without Ctrl");
+}
+
+function testManualChainGraceDoesNotAutoClimbWithoutInput() {
+  const g = makeGame();
+  g.loadLevel(0);
+  setPlayer(g, cellX(g, 7), standY(g, 60), "solid");
+
+  press(g, "ShiftLeft");
+  step(g, 60);
+  assert(g.overlappingSolidTiles(g.playerRect()).length > 0, "manual grace safety never entered the first mass");
+  release(g, "ShiftLeft");
+  step(g);
+  assert(g.player.state === "rebounding", "manual grace safety did not start the first rebound");
+
+  let reboundStarts = 1;
+  let previousState = g.player.state;
+  for (let i = 0; i < 360; i++) {
+    assert(g.keys.ControlLeft !== true && g.keys.ControlRight !== true, "manual grace safety used Ctrl");
+    step(g);
+    if (previousState !== "rebounding" && g.player.state === "rebounding") reboundStarts++;
+    previousState = g.player.state;
+    assert(g.player.state !== "stuck", "manual grace safety entered stuck recovery");
+    assert(g.keys.ShiftLeft !== true && g.keys.ShiftRight !== true, "manual grace safety kept Shift held");
+  }
+
+  assert(g.player.won === false, "manual grace climbed to the goal without further input");
+  assert(reboundStarts === 1, "manual grace started repeated rebounds without further input");
 }
 
 function testReboundHorizontalBoostScalesMovement() {
@@ -2073,6 +2102,7 @@ const tests = [
   ["manual queue consumes on surface", testManualQueueConsumesOnSurface],
   ["manual tap chain keeps queued permeation", testManualTapChainKeepsQueuedPermeation],
   ["manual rhythm chain completes first level without Ctrl", testManualRhythmChainCompletesFirstLevelWithoutCtrl],
+  ["manual chain grace does not auto-climb without input", testManualChainGraceDoesNotAutoClimbWithoutInput],
   ["rebound horizontal boost scales movement", testReboundHorizontalBoostScalesMovement],
   ["Ctrl chain rebounds keep horizontal boost", testCtrlChainReboundsKeepHorizontalBoost],
   ["upper-body-only release waits until clear", testUpperBodyOnlyReleaseDoesNotRebound],
