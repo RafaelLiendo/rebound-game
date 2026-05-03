@@ -20,8 +20,8 @@ Supporting notes:
 - `Lore.md` describes the larger Shadow Cats / Open Claw fantasy. Treat it as
   useful direction for theme, naming, and future expansion.
 - `smoke-test.js` is the lightweight Node-based regression suite.
-- `manifest.webmanifest` provides the mobile install/PWA metadata for
-  home-screen fullscreen-style launch.
+- `manifest.webmanifest` provides optional mobile install metadata. Mobile play
+  should work well in the browser without requiring PWA installation.
 
 ## Commands
 
@@ -95,15 +95,24 @@ There is no build step. `index.html` can be opened directly in a browser.
     Space jump;
   - the right button is labeled `Hold`, maps to Shift while pressed, and shows
     a `^` cue because upward drag maps to Ctrl+Shift assisted chaining;
-  - mobile control help in the HUD should describe the touch controls, not
-    desktop keyboard controls.
-- Do not add a fake fullscreen button for iPhone Safari. Prefer the PWA path:
-  keep `manifest.webmanifest`, mobile web app meta tags, and the iPhone
-  `Share > Add to Home Screen` hint. The hint should show only for iOS browser
-  mobile mode and hide in standalone/home-screen mode.
-- Mobile landscape layout should fill the available viewport cleanly, using
-  safe-area-aware positioning for controls and HUD. Portrait should keep the
-  rotate prompt.
+  - mobile control help in the HUD should show a small copy of the `Hold`
+    button and explain only the right-button actions: hold to sink, release to
+    rebound, and drag up to chain rebound. Do not explain the move stick there.
+- Do not add a fake fullscreen button for iPhone Safari, and do not make PWA
+  installation the primary mobile path. Keep `manifest.webmanifest` and mobile
+  web app meta tags as optional install metadata, but browser play must not
+  depend on users finding `Share > Add to Home Screen`.
+- Mobile layout should treat the `.shell` as the single game surface. In mobile
+  landscape, it should fill the visible viewport using `visualViewport` when
+  available, keep logical canvas height at 540, and widen the logical canvas
+  width to match the phone aspect ratio rather than stretching the scene.
+  Desktop should keep the fixed 960 x 540 logical viewport.
+- Mobile browser gestures should be suppressed across the game surface, canvas,
+  HUD, and touch controls. Preserve `touch-action: none`, disabled text
+  selection/callouts, non-passive gesture guards, and document/window cleanup
+  for touch-owned virtual keys so iOS does not select text, page-zoom, scroll,
+  open callouts, or leave controls stuck. Portrait should keep the rotate
+  prompt.
 - Rebound tuning is intentionally target-based. `reboundDepthLevel()` is the
   lower-body embedded depth in tile rows, clamped by the active mass height and
   the five-row tuning cap, so the center of a five-row mass is `2.5` and the
@@ -216,8 +225,8 @@ Add smoke coverage when changing:
   pass-through thickness
 - HUD meter behavior or visual charge scaling, including rebound-depth meter
   levels, five visible segments, ARIA value text, and full/empty fill states
-- mobile controls, HUD copy, touch mappings, iOS install hints, PWA manifest
-  metadata, or mobile viewport behavior
+- mobile controls, HUD copy, touch mappings, gesture suppression, optional PWA
+  manifest metadata, or mobile viewport behavior
 - level loading or goal completion
 - authored level reachability, especially terrain gaps, rebound mass heights,
   moving platform surfaces, player clearance, and goal shelf access

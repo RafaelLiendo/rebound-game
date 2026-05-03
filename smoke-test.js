@@ -93,7 +93,6 @@ function makeGame() {
     addEventListener() {},
     querySelector(selector) {
       if (selector === ".shell") return makeElement();
-      if (selector === ".gameSurface") return elements.gameSurface || makeElement();
       return null;
     },
     getElementById(id) {
