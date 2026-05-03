@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <title>Permeation Buoyancy Demo</title>
   <style>
     :root {
@@ -45,6 +47,26 @@
       aspect-ratio: 16 / 9;
       min-height: 280px;
       max-height: calc(100vh - 36px);
+    }
+
+    .shell:fullscreen,
+    .shell:-webkit-full-screen {
+      display: grid;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      max-height: none;
+      min-height: 0;
+      place-items: center;
+      background: #060814;
+    }
+
+    .shell:fullscreen canvas,
+    .shell:-webkit-full-screen canvas {
+      width: min(100vw, calc(100vh * 16 / 9));
+      height: min(100vh, calc(100vw * 9 / 16));
+      border: 0;
+      border-radius: 0;
     }
 
     canvas {
@@ -292,6 +314,21 @@
       text-transform: uppercase;
     }
 
+    .fullscreenButton {
+      appearance: none;
+      top: max(14px, calc(env(safe-area-inset-top) + 10px));
+      left: 50%;
+      width: clamp(52px, 10vmin, 68px);
+      height: clamp(52px, 10vmin, 68px);
+      color: rgba(246, 243, 255, 0.86);
+      font-family: inherit;
+      font-size: clamp(11px, 2.2vmin, 13px);
+      font-weight: 900;
+      letter-spacing: 0;
+      text-transform: uppercase;
+      transform: translateX(-50%);
+    }
+
     .touchKnob {
       width: 42%;
       height: 42%;
@@ -310,6 +347,16 @@
       width: 68%;
       height: 68%;
       background: rgba(246, 243, 255, 0.13);
+    }
+
+    .mobileShift .touchKnob::before {
+      position: absolute;
+      top: -18px;
+      color: rgba(246, 243, 255, 0.82);
+      content: "^";
+      font-size: 17px;
+      line-height: 1;
+      text-shadow: 0 0 10px rgba(75, 231, 255, 0.58);
     }
 
     .rotatePrompt {
@@ -339,8 +386,25 @@
       }
     }
 
+    @media (orientation: landscape) {
+      .mobileMode .mobileControls {
+        display: block;
+      }
+
+      .mobileMode .hud {
+        left: max(10px, calc(env(safe-area-inset-left) + 10px));
+        right: max(10px, calc(env(safe-area-inset-right) + 10px));
+      }
+    }
+
     @media (pointer: coarse) and (orientation: portrait) {
       .rotatePrompt {
+        display: grid;
+      }
+    }
+
+    @media (orientation: portrait) {
+      .mobileMode .rotatePrompt {
         display: grid;
       }
     }
@@ -442,6 +506,48 @@
         font-size: 9px;
       }
     }
+
+    @media (orientation: landscape) {
+      .mobileMode .hud {
+        top: max(8px, calc(env(safe-area-inset-top) + 8px));
+        grid-template-columns: max-content 1fr max-content;
+        grid-template-areas:
+          "readout . controls";
+        gap: 10px;
+      }
+
+      .mobileMode .controls {
+        display: grid;
+        grid-template-rows: repeat(2, minmax(0, 1fr));
+        grid-auto-flow: column;
+        gap: 4px 10px;
+        max-width: min(56vw, 440px);
+        padding: 7px 9px;
+        font-size: 10px;
+      }
+
+      .mobileMode .desktopControl {
+        display: none;
+      }
+
+      .mobileMode .mobileControl {
+        display: flex;
+      }
+
+      .mobileMode .control,
+      .mobileMode .control:nth-child(-n + 2),
+      .mobileMode .control:nth-child(n + 3) {
+        grid-column: auto;
+      }
+
+      .mobileMode .control-name {
+        font-size: 10px;
+      }
+
+      .mobileMode .control-hint {
+        font-size: 9px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -526,9 +632,10 @@
       <div id="mobileJoystick" class="touchControl mobileJoystick" aria-label="Move and jump">
         <span id="mobileJoystickKnob" class="touchKnob" aria-hidden="true"></span>
       </div>
-      <div id="mobileShift" class="touchControl mobileShift" role="button" aria-label="Hold Shift; drag up for Ctrl assist">
-        <span id="mobileShiftKnob" class="touchKnob">Shift</span>
+      <div id="mobileShift" class="touchControl mobileShift" role="button" aria-label="Hold; drag up to chain rebound">
+        <span id="mobileShiftKnob" class="touchKnob">Hold</span>
       </div>
+      <button id="fullscreenButton" class="touchControl fullscreenButton" type="button" aria-label="Play fullscreen">Full</button>
     </div>
     <div class="rotatePrompt" aria-hidden="true">Rotate to landscape</div>
   </main>
@@ -570,15 +677,51 @@
     };
 
     var TS = CONFIG.TILE_SIZE;
+    var root = document.documentElement;
+    var shell = document.querySelector ? document.querySelector(".shell") : null;
     var canvas = document.getElementById("game");
     var ctx = canvas.getContext("2d");
     var stateLabel = document.getElementById("stateLabel");
     var messageLabel = document.getElementById("messageLabel");
     var pressureMeter = document.getElementById("pressureMeter");
     var pressureFill = document.getElementById("pressureFill");
+    var fullscreenButton = document.getElementById("fullscreenButton");
     var particles = [];
     var ripples = [];
     var shake = 0;
+
+    function detectTouchMode() {
+      return !!(
+        (typeof navigator !== "undefined" && navigator.maxTouchPoints > 0) ||
+        ("ontouchstart" in window)
+      );
+    }
+
+    function detectCompactMobileViewport() {
+      if (typeof window === "undefined") return false;
+      return Math.min(window.innerWidth || 0, window.innerHeight || 0) <= 540 &&
+        Math.max(window.innerWidth || 0, window.innerHeight || 0) <= 980;
+    }
+
+    function syncMobileModeClasses() {
+      if (!root || !root.classList) return;
+      var touchMode = detectTouchMode();
+      var mobileMode = touchMode || detectCompactMobileViewport();
+      if (touchMode) {
+        root.classList.add("touchMode");
+      } else {
+        root.classList.remove("touchMode");
+      }
+      if (mobileMode) {
+        root.classList.add("mobileMode");
+      } else {
+        root.classList.remove("mobileMode");
+      }
+    }
+
+    syncMobileModeClasses();
+    window.addEventListener("resize", syncMobileModeClasses);
+    window.addEventListener("orientationchange", syncMobileModeClasses);
 
     // === LEVEL DATA ===
     function defined(value, fallback) {
@@ -818,7 +961,7 @@
           ".........................######.........................................",
           "...............#######..................................................",
           "........................................................................",
-          "..0.....................................................................",
+          ".........0..............................................................",
           "############............................................................",
           "############////////////////////////////////////////////////////////////"
         ]
@@ -1515,6 +1658,42 @@
     canvas.addEventListener("pointerup", function (ev) {
       if (activateCompletionPrompt()) ev.preventDefault();
     });
+
+    function fullscreenElement() {
+      return document.fullscreenElement || document.webkitFullscreenElement || null;
+    }
+
+    function requestGameFullscreen() {
+      var target = shell || canvas;
+      if (!target) return false;
+      if (fullscreenElement()) return true;
+      if (target.requestFullscreen) {
+        target.requestFullscreen();
+        return true;
+      }
+      if (target.webkitRequestFullscreen) {
+        target.webkitRequestFullscreen();
+        return true;
+      }
+      return false;
+    }
+
+    function updateFullscreenButton() {
+      if (!fullscreenButton) return;
+      fullscreenButton.textContent = fullscreenElement() ? "Full" : "Full";
+      fullscreenButton.setAttribute("aria-label", fullscreenElement() ? "Fullscreen active" : "Play fullscreen");
+    }
+
+    if (fullscreenButton && fullscreenButton.addEventListener) {
+      fullscreenButton.addEventListener("pointerup", function (ev) {
+        ev.preventDefault();
+        requestGameFullscreen();
+        updateFullscreenButton();
+      });
+    }
+    document.addEventListener("fullscreenchange", updateFullscreenButton);
+    document.addEventListener("webkitfullscreenchange", updateFullscreenButton);
+    updateFullscreenButton();
 
     function installMobileControls() {
       var joystick = document.getElementById("mobileJoystick");
@@ -3426,6 +3605,9 @@
       loadLevel: loadLevel,
       nextLevel: nextLevel,
       activateCompletionPrompt: activateCompletionPrompt,
+      requestGameFullscreen: requestGameFullscreen,
+      detectTouchMode: detectTouchMode,
+      detectCompactMobileViewport: detectCompactMobileViewport,
       isFinalLevel: isFinalLevel,
       updateCamera: updateCamera,
       renderOnly: renderOnly,

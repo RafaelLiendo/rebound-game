@@ -47,8 +47,17 @@ function makeGame() {
       }
     };
   }
-  global.window = { addEventListener() {}, gameInternals: null };
+  const documentElement = makeElement();
+  global.window = { addEventListener() {}, innerWidth: 960, innerHeight: 540, gameInternals: null };
   global.document = {
+    documentElement,
+    fullscreenElement: null,
+    webkitFullscreenElement: null,
+    addEventListener() {},
+    querySelector(selector) {
+      if (selector === ".shell") return makeElement();
+      return null;
+    },
     getElementById(id) {
       if (!elements[id]) elements[id] = makeElement();
       return elements[id];
@@ -173,9 +182,21 @@ function testMobileHudCopyExplainsTouchControls() {
   assert(html.includes("Hold Shift"), "mobile HUD copy does not explain holding Shift");
   assert(html.includes("Release Shift"), "mobile HUD copy does not explain releasing Shift");
   assert(html.includes("drag up to chain rebound"), "mobile HUD copy does not explain Shift drag-up chaining");
+  assert(html.includes('id="mobileShiftKnob" class="touchKnob">Hold</span>'), "mobile Shift button does not say Hold");
+  assert(html.includes('content: "^"'), "mobile Shift button does not show an upward drag cue");
+  assert(html.includes("mobileMode"), "mobile HUD does not have the robust mobile-mode fallback");
+  assert(html.includes("fullscreenButton"), "mobile fullscreen button is missing");
+  assert(html.includes("viewport-fit=cover"), "mobile viewport does not opt into safe-area fullscreen layout");
   assert(html.includes("Tap to continue"), "completion prompt does not use tap-to-continue copy");
   assert(html.includes("Tap to checkpoint"), "final completion prompt does not use tap-to-checkpoint copy");
   assert(!html.includes("Press Space for next rift"), "win prompt still asks mobile players to press Space");
+}
+
+function testCompactViewportEnablesMobileMode() {
+  const g = makeGame();
+  global.window.innerWidth = 844;
+  global.window.innerHeight = 390;
+  assert(g.detectCompactMobileViewport() === true, "landscape phone-sized viewport was not treated as mobile mode");
 }
 
 function testTapCompletionPromptAdvancesLevel() {
@@ -2781,6 +2802,7 @@ const tests = [
   ["mobile Shift button maps Shift and vertical assist", testMobileShiftButtonMapsShiftAndVerticalAssist],
   ["mobile Shift release at top releases Shift and Ctrl", testMobileShiftReleaseAtTopReleasesShiftAndCtrl],
   ["mobile HUD copy explains touch controls", testMobileHudCopyExplainsTouchControls],
+  ["compact viewport enables mobile mode", testCompactViewportEnablesMobileMode],
   ["tap completion prompt advances level", testTapCompletionPromptAdvancesLevel],
   ["tap final completion prompt restarts checkpoint", testTapFinalCompletionPromptRestartsCheckpoint],
   ["load level recalculates map", testLoadLevelRecalculatesMap],
