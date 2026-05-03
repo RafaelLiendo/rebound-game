@@ -234,6 +234,113 @@
       font-weight: 650;
     }
 
+    .mobileControls,
+    .rotatePrompt {
+      display: none;
+    }
+
+    .mobileControls {
+      position: absolute;
+      z-index: 5;
+      inset: 0;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .touchControl {
+      position: absolute;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(155, 221, 255, 0.34);
+      border-radius: 999px;
+      background: rgba(8, 12, 30, 0.18);
+      box-shadow:
+        0 0 24px rgba(75, 231, 255, 0.11),
+        inset 0 0 20px rgba(246, 243, 255, 0.05);
+      opacity: 0.48;
+      pointer-events: auto;
+      touch-action: none;
+      transition: opacity 120ms ease, border-color 120ms ease, background 120ms ease;
+    }
+
+    .touchControl.isActive {
+      border-color: rgba(155, 221, 255, 0.62);
+      background: rgba(10, 16, 42, 0.28);
+      opacity: 0.76;
+    }
+
+    .mobileJoystick {
+      left: max(18px, calc(env(safe-area-inset-left) + 14px));
+      bottom: max(18px, calc(env(safe-area-inset-bottom) + 14px));
+      width: clamp(112px, 23vmin, 148px);
+      height: clamp(112px, 23vmin, 148px);
+    }
+
+    .mobileShift {
+      right: max(22px, calc(env(safe-area-inset-right) + 18px));
+      bottom: max(24px, calc(env(safe-area-inset-bottom) + 18px));
+      width: clamp(82px, 17vmin, 114px);
+      height: clamp(82px, 17vmin, 114px);
+      color: rgba(246, 243, 255, 0.84);
+      font-size: clamp(13px, 2.8vmin, 16px);
+      font-weight: 900;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    .touchKnob {
+      width: 42%;
+      height: 42%;
+      border: 1px solid rgba(246, 243, 255, 0.34);
+      border-radius: inherit;
+      background: rgba(246, 243, 255, 0.16);
+      box-shadow: 0 0 18px rgba(181, 108, 255, 0.16);
+      transform: translate(0, 0);
+      transition: transform 60ms linear;
+      pointer-events: none;
+    }
+
+    .mobileShift .touchKnob {
+      display: grid;
+      place-items: center;
+      width: 68%;
+      height: 68%;
+      background: rgba(246, 243, 255, 0.13);
+    }
+
+    .rotatePrompt {
+      position: absolute;
+      z-index: 6;
+      inset: 0;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(6, 8, 20, 0.82);
+      color: var(--ink);
+      font-size: clamp(18px, 5vw, 28px);
+      font-weight: 900;
+      text-align: center;
+      pointer-events: none;
+      backdrop-filter: blur(12px);
+    }
+
+    @media (pointer: coarse) and (orientation: landscape) {
+      .mobileControls {
+        display: block;
+      }
+
+      .hud {
+        left: max(10px, calc(env(safe-area-inset-left) + 10px));
+        right: max(10px, calc(env(safe-area-inset-right) + 10px));
+      }
+    }
+
+    @media (pointer: coarse) and (orientation: portrait) {
+      .rotatePrompt {
+        display: grid;
+      }
+    }
+
     @media (max-width: 980px) {
       .hud {
         grid-template-columns: max-content 1fr;
@@ -341,6 +448,15 @@
         </span>
       </div>
     </section>
+    <div id="mobileControls" class="mobileControls" aria-label="Touch controls">
+      <div id="mobileJoystick" class="touchControl mobileJoystick" aria-label="Move and jump">
+        <span id="mobileJoystickKnob" class="touchKnob" aria-hidden="true"></span>
+      </div>
+      <div id="mobileShift" class="touchControl mobileShift" role="button" aria-label="Hold Shift; drag up for Ctrl assist">
+        <span id="mobileShiftKnob" class="touchKnob">Shift</span>
+      </div>
+    </div>
+    <div class="rotatePrompt" aria-hidden="true">Rotate to landscape</div>
   </main>
   <script>
   (function () {
@@ -1275,22 +1391,234 @@
     var keys = Object.create(null);
     var keyEdge = Object.create(null);
     var keyReleased = Object.create(null);
+    var handledInputCodes = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space", "Enter", "ShiftLeft", "ShiftRight", "ControlLeft", "ControlRight", "KeyA", "KeyD", "KeyW", "KeyR"];
+
+    function isHandledInput(code) {
+      return handledInputCodes.indexOf(code) >= 0;
+    }
+
+    function setVirtualKey(code, isDown) {
+      if (isDown) {
+        if (!keys[code]) keyEdge[code] = true;
+        keys[code] = true;
+        keyReleased[code] = false;
+      } else {
+        if (keys[code]) keyReleased[code] = true;
+        keys[code] = false;
+        keyEdge[code] = false;
+      }
+    }
+
+    function setOwnedVirtualKeys(ownedKeys, nextDown) {
+      for (var heldCode in ownedKeys) {
+        if (!nextDown[heldCode]) {
+          setVirtualKey(heldCode, false);
+          delete ownedKeys[heldCode];
+        }
+      }
+      for (var nextCode in nextDown) {
+        if (!ownedKeys[nextCode]) {
+          setVirtualKey(nextCode, true);
+          ownedKeys[nextCode] = true;
+        }
+      }
+    }
 
     window.addEventListener("keydown", function (ev) {
-      if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space", "Enter", "ShiftLeft", "ShiftRight", "ControlLeft", "ControlRight", "KeyA", "KeyD", "KeyW", "KeyR"].indexOf(ev.code) >= 0) {
+      if (isHandledInput(ev.code)) {
         ev.preventDefault();
       }
-      if (!keys[ev.code]) keyEdge[ev.code] = true;
-      keys[ev.code] = true;
+      setVirtualKey(ev.code, true);
     });
 
     window.addEventListener("keyup", function (ev) {
-      if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space", "Enter", "ShiftLeft", "ShiftRight", "ControlLeft", "ControlRight", "KeyA", "KeyD", "KeyW", "KeyR"].indexOf(ev.code) >= 0) {
+      if (isHandledInput(ev.code)) {
         ev.preventDefault();
       }
-      keys[ev.code] = false;
-      keyReleased[ev.code] = true;
+      setVirtualKey(ev.code, false);
     });
+
+    function installMobileControls() {
+      var joystick = document.getElementById("mobileJoystick");
+      var joystickKnob = document.getElementById("mobileJoystickKnob");
+      var shift = document.getElementById("mobileShift");
+      var shiftKnob = document.getElementById("mobileShiftKnob");
+      var joystickState = {
+        pointerId: null,
+        originX: 0,
+        originY: 0,
+        centerX: 0,
+        centerY: 0,
+        ownedKeys: Object.create(null)
+      };
+      var shiftState = {
+        pointerId: null,
+        originY: 0,
+        diameter: 96,
+        ownedKeys: Object.create(null)
+      };
+      var joystickDeadZone = 18;
+      var joystickMaxPull = 46;
+
+      function pointerPoint(ev) {
+        return { x: ev.clientX || 0, y: ev.clientY || 0 };
+      }
+
+      function setKnobTransform(knob, dx, dy) {
+        if (knob && knob.style) knob.style.transform = "translate(" + dx.toFixed(1) + "px, " + dy.toFixed(1) + "px)";
+      }
+
+      function setActive(el, isActive) {
+        if (!el || !el.classList) return;
+        if (isActive) {
+          el.classList.add("isActive");
+        } else {
+          el.classList.remove("isActive");
+        }
+      }
+
+      function clampVector(dx, dy, maxLength) {
+        var length = Math.sqrt(dx * dx + dy * dy);
+        if (length <= maxLength || length === 0) return { x: dx, y: dy };
+        return { x: dx / length * maxLength, y: dy / length * maxLength };
+      }
+
+      function updateJoystick(x, y) {
+        var dx = x - joystickState.originX;
+        var dy = y - joystickState.originY;
+        var nextDown = Object.create(null);
+        if (dx < -joystickDeadZone) nextDown.ArrowLeft = true;
+        if (dx > joystickDeadZone) nextDown.ArrowRight = true;
+        if (dy < -joystickDeadZone) nextDown.Space = true;
+        setOwnedVirtualKeys(joystickState.ownedKeys, nextDown);
+        var pull = clampVector(x - joystickState.centerX, y - joystickState.centerY, joystickMaxPull);
+        setKnobTransform(joystickKnob, pull.x, pull.y);
+      }
+
+      function endJoystick() {
+        setOwnedVirtualKeys(joystickState.ownedKeys, Object.create(null));
+        joystickState.pointerId = null;
+        setKnobTransform(joystickKnob, 0, 0);
+        setActive(joystick, false);
+      }
+
+      function updateShift(y) {
+        var dy = y - shiftState.originY;
+        var threshold = shiftState.diameter / 3;
+        var nextDown = Object.create(null);
+        nextDown.ShiftLeft = true;
+        if (dy <= -threshold) nextDown.ControlLeft = true;
+        setOwnedVirtualKeys(shiftState.ownedKeys, nextDown);
+        var pullY = clamp(dy, -shiftState.diameter * 0.32, shiftState.diameter * 0.18);
+        setKnobTransform(shiftKnob, 0, pullY);
+      }
+
+      function endShift() {
+        setOwnedVirtualKeys(shiftState.ownedKeys, Object.create(null));
+        shiftState.pointerId = null;
+        setKnobTransform(shiftKnob, 0, 0);
+        setActive(shift, false);
+      }
+
+      function joystickStart(x, y, pointerId) {
+        if (joystickState.pointerId !== null) return;
+        joystickState.pointerId = pointerId === undefined ? "test" : pointerId;
+        joystickState.originX = x;
+        joystickState.originY = y;
+        var rect = joystick && joystick.getBoundingClientRect ? joystick.getBoundingClientRect() : { left: x - 48, top: y - 48, width: 96, height: 96 };
+        joystickState.centerX = rect.left + rect.width / 2;
+        joystickState.centerY = rect.top + rect.height / 2;
+        setActive(joystick, true);
+        updateJoystick(x, y);
+      }
+
+      function joystickMove(x, y, pointerId) {
+        if (joystickState.pointerId === null) return;
+        if (pointerId !== undefined && pointerId !== joystickState.pointerId) return;
+        updateJoystick(x, y);
+      }
+
+      function joystickEnd(pointerId) {
+        if (joystickState.pointerId === null) return;
+        if (pointerId !== undefined && pointerId !== joystickState.pointerId) return;
+        endJoystick();
+      }
+
+      function shiftStart(y, pointerId, diameter) {
+        if (shiftState.pointerId !== null) return;
+        shiftState.pointerId = pointerId === undefined ? "test" : pointerId;
+        shiftState.originY = y;
+        shiftState.diameter = diameter || shiftState.diameter;
+        setActive(shift, true);
+        updateShift(y);
+      }
+
+      function shiftMove(y, pointerId) {
+        if (shiftState.pointerId === null) return;
+        if (pointerId !== undefined && pointerId !== shiftState.pointerId) return;
+        updateShift(y);
+      }
+
+      function shiftEnd(pointerId) {
+        if (shiftState.pointerId === null) return;
+        if (pointerId !== undefined && pointerId !== shiftState.pointerId) return;
+        endShift();
+      }
+
+      if (joystick && joystick.addEventListener) {
+        joystick.addEventListener("pointerdown", function (ev) {
+          ev.preventDefault();
+          if (joystick.setPointerCapture) joystick.setPointerCapture(ev.pointerId);
+          var point = pointerPoint(ev);
+          joystickStart(point.x, point.y, ev.pointerId);
+        });
+        joystick.addEventListener("pointermove", function (ev) {
+          ev.preventDefault();
+          var point = pointerPoint(ev);
+          joystickMove(point.x, point.y, ev.pointerId);
+        });
+        joystick.addEventListener("pointerup", function (ev) {
+          ev.preventDefault();
+          joystickEnd(ev.pointerId);
+        });
+        joystick.addEventListener("pointercancel", function (ev) {
+          ev.preventDefault();
+          joystickEnd(ev.pointerId);
+        });
+      }
+
+      if (shift && shift.addEventListener) {
+        shift.addEventListener("pointerdown", function (ev) {
+          ev.preventDefault();
+          if (shift.setPointerCapture) shift.setPointerCapture(ev.pointerId);
+          var rect = shift.getBoundingClientRect ? shift.getBoundingClientRect() : { height: shiftState.diameter };
+          shiftStart(ev.clientY || 0, ev.pointerId, rect.height || shiftState.diameter);
+        });
+        shift.addEventListener("pointermove", function (ev) {
+          ev.preventDefault();
+          shiftMove(ev.clientY || 0, ev.pointerId);
+        });
+        shift.addEventListener("pointerup", function (ev) {
+          ev.preventDefault();
+          shiftEnd(ev.pointerId);
+        });
+        shift.addEventListener("pointercancel", function (ev) {
+          ev.preventDefault();
+          shiftEnd(ev.pointerId);
+        });
+      }
+
+      return {
+        joystickStart: joystickStart,
+        joystickMove: joystickMove,
+        joystickEnd: joystickEnd,
+        shiftStart: shiftStart,
+        shiftMove: shiftMove,
+        shiftEnd: shiftEnd
+      };
+    }
+
+    var mobileInput = installMobileControls();
 
     function permeateHeld() {
       return !!(keys.ShiftLeft || keys.ShiftRight);
@@ -3000,6 +3328,8 @@
       keys: keys,
       keyEdge: keyEdge,
       keyReleased: keyReleased,
+      setVirtualKey: setVirtualKey,
+      mobileInput: mobileInput,
       get spawnCell() { return spawnCell; },
       get goalRect() { return goalRect; },
       parseLevel: parseLevel,

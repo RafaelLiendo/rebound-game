@@ -6,10 +6,27 @@ const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 function makeGame() {
   const elements = {};
   function makeElement() {
+    const classes = new Set();
     return {
       style: {},
       attributes: {},
       textContent: "",
+      classList: {
+        add(name) {
+          classes.add(name);
+        },
+        remove(name) {
+          classes.delete(name);
+        },
+        contains(name) {
+          return classes.has(name);
+        }
+      },
+      addEventListener() {},
+      setPointerCapture() {},
+      getBoundingClientRect() {
+        return { width: 96, height: 96, left: 0, top: 0, right: 96, bottom: 96 };
+      },
       setAttribute(name, value) {
         this.attributes[name] = String(value);
       },
@@ -61,6 +78,95 @@ function resetKeys(g) {
   for (const k of Object.keys(g.keys)) g.keys[k] = false;
   for (const k of Object.keys(g.keyEdge)) g.keyEdge[k] = false;
   for (const k of Object.keys(g.keyReleased)) g.keyReleased[k] = false;
+}
+
+function testVirtualKeyHelperTracksEdgesAndReleases() {
+  const g = makeGame();
+  g.setVirtualKey("ArrowLeft", true);
+  assert(g.keys.ArrowLeft === true, "virtual key did not become held");
+  assert(g.keyEdge.ArrowLeft === true, "virtual key did not emit press edge");
+  assert(g.keyReleased.ArrowLeft !== true, "virtual key emitted release while pressed");
+
+  g.clearEdges();
+  g.setVirtualKey("ArrowLeft", true);
+  assert(g.keyEdge.ArrowLeft !== true, "held virtual key repeated press edge");
+
+  g.setVirtualKey("ArrowLeft", false);
+  assert(g.keys.ArrowLeft === false, "virtual key did not release held state");
+  assert(g.keyReleased.ArrowLeft === true, "virtual key did not emit release edge");
+  assert(g.keyEdge.ArrowLeft !== true, "virtual key kept press edge after release");
+}
+
+function testMobileJoystickMapsMoveAndJumpKeys() {
+  const g = makeGame();
+  g.mobileInput.joystickStart(100, 100, 1);
+  assert(!g.keys.ArrowLeft && !g.keys.ArrowRight && !g.keys.Space, "neutral joystick pressed a key");
+
+  g.mobileInput.joystickMove(60, 100, 1);
+  assert(g.keys.ArrowLeft === true, "joystick left did not hold ArrowLeft");
+  assert(g.keyEdge.ArrowLeft === true, "joystick left did not emit ArrowLeft edge");
+
+  g.mobileInput.joystickMove(140, 100, 1);
+  assert(g.keys.ArrowLeft === false, "joystick right did not release ArrowLeft");
+  assert(g.keyReleased.ArrowLeft === true, "joystick right did not emit ArrowLeft release");
+  assert(g.keys.ArrowRight === true, "joystick right did not hold ArrowRight");
+  assert(g.keyEdge.ArrowRight === true, "joystick right did not emit ArrowRight edge");
+
+  g.clearEdges();
+  g.mobileInput.joystickMove(140, 60, 1);
+  assert(g.keys.ArrowRight === true, "diagonal joystick did not keep ArrowRight");
+  assert(g.keys.Space === true, "joystick up did not hold Space");
+  assert(g.keyEdge.Space === true, "joystick up did not emit Space edge");
+
+  g.clearEdges();
+  g.mobileInput.joystickMove(100, 100, 1);
+  assert(g.keys.ArrowRight === false, "neutral joystick did not release ArrowRight");
+  assert(g.keys.Space === false, "neutral joystick did not release Space");
+  assert(g.keyReleased.ArrowRight === true, "neutral joystick did not emit ArrowRight release");
+  assert(g.keyReleased.Space === true, "neutral joystick did not emit Space release");
+}
+
+function testMobileShiftButtonMapsShiftAndVerticalAssist() {
+  const g = makeGame();
+  g.mobileInput.shiftStart(100, 2, 90);
+  assert(g.keys.ShiftLeft === true, "Shift button did not hold Shift");
+  assert(g.keyEdge.ShiftLeft === true, "Shift button did not emit Shift edge");
+  assert(g.keys.ControlLeft !== true, "centered Shift button held Ctrl");
+
+  g.clearEdges();
+  g.mobileInput.shiftMove(71, 2);
+  assert(g.keys.ShiftLeft === true, "near-threshold Shift drag released Shift");
+  assert(g.keys.ControlLeft !== true, "near-threshold Shift drag held Ctrl early");
+
+  g.mobileInput.shiftMove(70, 2);
+  assert(g.keys.ControlLeft === true, "upward Shift drag did not hold Ctrl");
+  assert(g.keyEdge.ControlLeft === true, "upward Shift drag did not emit Ctrl edge");
+
+  g.clearEdges();
+  g.mobileInput.shiftMove(86, 2);
+  assert(g.keys.ShiftLeft === true, "returning Shift drag released Shift");
+  assert(g.keys.ControlLeft === false, "returning Shift drag did not release Ctrl");
+  assert(g.keyReleased.ControlLeft === true, "returning Shift drag did not emit Ctrl release");
+
+  g.clearEdges();
+  g.mobileInput.shiftEnd(2);
+  assert(g.keys.ShiftLeft === false, "center release did not release Shift");
+  assert(g.keyReleased.ShiftLeft === true, "center release did not emit Shift release");
+  assert(g.keyReleased.ControlLeft !== true, "center release emitted extra Ctrl release");
+}
+
+function testMobileShiftReleaseAtTopReleasesShiftAndCtrl() {
+  const g = makeGame();
+  g.mobileInput.shiftStart(100, 3, 90);
+  g.clearEdges();
+  g.mobileInput.shiftMove(60, 3);
+  g.clearEdges();
+  g.mobileInput.shiftEnd(3);
+
+  assert(g.keys.ShiftLeft === false, "top release did not release Shift");
+  assert(g.keys.ControlLeft === false, "top release did not release Ctrl");
+  assert(g.keyReleased.ShiftLeft === true, "top release did not emit Shift release");
+  assert(g.keyReleased.ControlLeft === true, "top release did not emit Ctrl release");
 }
 
 function scratchRows(rowCount = 50, colCount = 70) {
@@ -2640,6 +2746,10 @@ function testAsteroidImpactRecoversToCheckpoint() {
 }
 
 const tests = [
+  ["virtual key helper tracks edges and releases", testVirtualKeyHelperTracksEdgesAndReleases],
+  ["mobile joystick maps move and jump keys", testMobileJoystickMapsMoveAndJumpKeys],
+  ["mobile Shift button maps Shift and vertical assist", testMobileShiftButtonMapsShiftAndVerticalAssist],
+  ["mobile Shift release at top releases Shift and Ctrl", testMobileShiftReleaseAtTopReleasesShiftAndCtrl],
   ["load level recalculates map", testLoadLevelRecalculatesMap],
   ["authored levels have valid starts", testAuthoredLevelsHaveValidMarkersAndStarts],
   ["playable campaign is redesigned level set", testPlayableCampaignIsRedesignedLevelSet],
