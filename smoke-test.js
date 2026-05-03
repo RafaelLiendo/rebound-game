@@ -999,7 +999,7 @@ function testManualQueueConsumesOnSurface() {
   assert(surfaced, "player never surfaced during rebound");
 }
 
-function testReboundHorizontalBoostDoublesMovement() {
+function testReboundHorizontalBoostScalesMovement() {
   const g = makeGame();
   const fixture = buildMeasurementFixture(g, { topRow: 24, leftCol: 10, massRows: 5, cols: 3 });
   const normalSpeed = g.CONFIG.MAX_RUN_SPEED;
@@ -1017,7 +1017,7 @@ function testReboundHorizontalBoostDoublesMovement() {
   for (let i = 0; i < 240; i++) {
     step(g);
     assert(g.player.state !== "stuck", "rebound horizontal boost entered stuck recovery");
-    assert(Math.abs(g.player.vx) <= boostedSpeed + eps, "rebound horizontal boost exceeded its doubled speed cap");
+    assert(Math.abs(g.player.vx) <= boostedSpeed + eps, "rebound horizontal boost exceeded its boosted speed cap");
     if (g.player.reboundHorizontalBoostActive && Math.abs(g.player.vx) > normalSpeed + eps) exceededNormal = true;
     if (g.player.state === "solid" && g.player.reboundHorizontalBoostActive && g.player.vy < 0) {
       sawSolidLaunchBoost = true;
@@ -1904,7 +1904,7 @@ const tests = [
   ["bug 2 tall mass rebounds once", testBugTwoTallMassReboundsOnce],
   ["auto assist climbs tuned thick stack", testAutoAssistClimbsTunedThickStack],
   ["manual queue consumes on surface", testManualQueueConsumesOnSurface],
-  ["rebound horizontal boost doubles movement", testReboundHorizontalBoostDoublesMovement],
+  ["rebound horizontal boost scales movement", testReboundHorizontalBoostScalesMovement],
   ["Ctrl chain rebounds keep horizontal boost", testCtrlChainReboundsKeepHorizontalBoost],
   ["upper-body-only release waits until clear", testUpperBodyOnlyReleaseDoesNotRebound],
   ["ceiling hang without input stays pinned", testCeilingHangWithoutInputStaysPinned],
