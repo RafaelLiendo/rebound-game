@@ -1195,6 +1195,47 @@ function testResetRespawnsAtActiveCheckpoint() {
   }
 }
 
+function testSlashHazardRecoversToActiveCheckpointAndStaysNonsolid() {
+  const g = makeGame();
+  const originalLength = g.LEVELS.length;
+  const index = g.LEVELS.length;
+  g.LEVELS.push(g.defineLevel({
+    name: "Slash Hazard Fixture",
+    map: fixtureRows(50, [
+      { char: "/", c: 16, r: 35, cols: 2, rows: 1 }
+    ], [
+      { order: 1, c: 8, r: 35 }
+    ])
+  }));
+
+  try {
+    g.loadLevel(index);
+    assert(g.hazardTiles[35][16] === true, "slash marker was not parsed as a hazard tile");
+    assert(g.isHazardTile(16, 35), "slash hazard tile lookup failed");
+    assert(!g.isSolidTile(16, 35), "slash hazard was treated as solid terrain");
+
+    setPlayer(g, cellX(g, 16), standY(g, 36), "solid");
+    assert(g.overlappingHazardTiles(g.playerRect()).length > 0, "player did not overlap slash hazard fixture");
+    assert(g.overlappingSolidTiles(g.playerRect()).length === 0, "slash hazard overlapped as solid terrain");
+
+    setPlayer(g, cellX(g, 8), standY(g, 36), "solid");
+    step(g);
+    assert(g.activeCheckpoint.order === 1, "checkpoint 1 was not activated before slash hazard recovery");
+
+    setPlayer(g, cellX(g, 16), standY(g, 36), "solid");
+    step(g);
+
+    assert(g.currentLevelIndex === index, "slash hazard recovery changed the current level");
+    assert(g.activeCheckpoint.order === 1, "slash hazard recovery cleared checkpoint progress");
+    assert(g.player.won === false, "slash hazard recovery left player in a won state");
+    assertNear(g.player.x, cellX(g, 8), "slash hazard did not recover player to active checkpoint x");
+    assertNear(g.player.y, standY(g, 36), "slash hazard did not recover player to active checkpoint y");
+  } finally {
+    g.LEVELS.length = originalLength;
+    g.loadLevel(0);
+  }
+}
+
 function testWinningAdvancesToNextLevel() {
   const g = makeGame();
   completeCurrentLevel(g);
@@ -2612,6 +2653,7 @@ const tests = [
   ["camera tracks horizontally in wide levels", testCameraTracksHorizontallyInWideLevel],
   ["load level rejects uneven rows", testLoadLevelRejectsUnevenRows],
   ["reset respawns at active checkpoint", testResetRespawnsAtActiveCheckpoint],
+  ["slash hazard recovers to active checkpoint and stays nonsolid", testSlashHazardRecoversToActiveCheckpointAndStaysNonsolid],
   ["winning advances to next level", testWinningAdvancesToNextLevel],
   ["final level stops at end", testFinalLevelDoesNotAdvancePastEnd],
   ["bug 1 auto-chain reaches top", testBugOneAutoChainReachesTop],

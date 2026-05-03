@@ -630,7 +630,7 @@
           "........................................................................",
           "..0.....................................................................",
           "############............................................................",
-          "########################################################################"
+          "############////////////////////////////////////////////////////////////"
         ]
       }),
       defineLevel({
@@ -681,7 +681,7 @@
           "....................................................................................",
           "....................................................................................",
           "....................................................................................",
-          "####################################################################################"
+          "////////////////////////////////////////////////////////////////////////////////////"
         ]
       }),
       defineLevel({
@@ -744,7 +744,7 @@
           "............................................................................",
           "......0.....................................................................",
           "##################..........................................................",
-          "############################################################################"
+          "##################//////////////////////////////////////////////////////////"
         ]
       }),
       defineLevel({
@@ -793,7 +793,7 @@
           "...0....................................................................................",
           "############............................................................................",
           "############............................................................................",
-          "########################################################################################"
+          "############////////////////////////////////////////////////////////////////////////////"
         ]
       }),
       defineLevel({
@@ -846,7 +846,7 @@
           "..................#######.......................................................................",
           "....0...........................................................................................",
           "##############..................................................................................",
-          "################################################################################################"
+          "##############//////////////////////////////////////////////////////////////////////////////////"
         ]
       }),
       defineLevel({
@@ -897,7 +897,7 @@
           "................................................................................................",
           "....0...........................................................................................",
           "##############..................................................................................",
-          "################################################################################################"
+          "##############//////////////////////////////////////////////////////////////////////////////////"
         ],
         entities: [
           {
@@ -989,7 +989,7 @@
           "..................................................................................",
           ".....0............................................................................",
           "###############...................................................................",
-          "##################################################################################"
+          "###############///////////////////////////////////////////////////////////////////"
         ],
         entities: [
           {
@@ -1062,7 +1062,7 @@
           "................................................................................................................",
           "................................................................................................................",
           "................................................................................................................",
-          "################################################################################################################"
+          "////////////////////////////////////////////////////////////////////////////////////////////////////////////////"
         ],
         entities: [
           {
@@ -1096,6 +1096,7 @@
     var levelH = 0;
     var levelW = 0;
     var tiles = [];
+    var hazardTiles = [];
     var entities = [];
     var checkpoints = [];
     var activeCheckpoint = { order: 0, name: "spawn", c: 1, r: 43, x: TS, y: 43 * TS };
@@ -1117,11 +1118,14 @@
       levelH = ROWS * TS;
       levelW = COLS * TS;
       tiles.length = 0;
+      hazardTiles.length = 0;
       for (var r = 0; r < ROWS; r++) {
         tiles[r] = [];
+        hazardTiles[r] = [];
         for (var c = 0; c < COLS; c++) {
           var ch = LEVEL[r][c];
           tiles[r][c] = ch === "#";
+          hazardTiles[r][c] = ch === "/";
         }
       }
     }
@@ -1413,6 +1417,11 @@
       return !!tiles[r][c];
     }
 
+    function isHazardTile(c, r) {
+      if (c < 0 || c >= COLS || r < 0 || r >= ROWS) return false;
+      return !!hazardTiles[r][c];
+    }
+
     function playerRect() {
       return { x: player.x, y: player.y, w: CONFIG.PLAYER_W, h: CONFIG.PLAYER_H };
     }
@@ -1439,6 +1448,22 @@
       return overlappingSolidTiles(rect).map(function (t) {
         return { type: "tile", c: t.c, r: t.r, x: t.c * TS, y: t.r * TS, w: TS, h: TS };
       });
+    }
+
+    function overlappingHazardTiles(rect) {
+      var out = [];
+      var left = Math.floor(rect.x / TS);
+      var right = Math.floor((rect.x + rect.w - 0.001) / TS);
+      var top = Math.floor(rect.y / TS);
+      var bottom = Math.floor((rect.y + rect.h - 0.001) / TS);
+      for (var r = top; r <= bottom; r++) {
+        for (var c = left; c <= right; c++) {
+          if (isHazardTile(c, r)) {
+            out.push({ type: "hazard", c: c, r: r, x: c * TS, y: r * TS, w: TS, h: TS });
+          }
+        }
+      }
+      return out;
     }
 
     function entityRect(e) {
@@ -2321,6 +2346,11 @@
       probeGrounded();
       if (player.grounded) player.coyoteTimer = CONFIG.COYOTE_FRAMES;
       updateCheckpointState();
+      if (overlappingHazardTiles(playerRect()).length > 0) {
+        recoverToCheckpoint();
+        clearEdges();
+        return;
+      }
       if (handleAsteroidImpacts()) {
         clearEdges();
         return;
@@ -2487,9 +2517,45 @@
     function drawTiles() {
       for (var r = 0; r < ROWS; r++) {
         for (var c = 0; c < COLS; c++) {
-          if (!tiles[r][c]) continue;
           var x = c * TS;
           var y = r * TS;
+          if (hazardTiles[r][c]) {
+            var hazardGrad = ctx.createLinearGradient(x, y, x, y + TS);
+            hazardGrad.addColorStop(0, "#201634");
+            hazardGrad.addColorStop(0.56, "#100d21");
+            hazardGrad.addColorStop(1, "#070814");
+            ctx.fillStyle = hazardGrad;
+            ctx.fillRect(x, y, TS, TS);
+            ctx.strokeStyle = "rgba(146, 103, 214, 0.42)";
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x + 0.5, y + 0.5, TS - 1, TS - 1);
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x, y, TS, TS);
+            ctx.clip();
+            ctx.shadowColor = "rgba(151, 88, 218, 0.6)";
+            ctx.shadowBlur = 5;
+            ctx.strokeStyle = "rgba(178, 127, 229, 0.62)";
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(x + 7, y + TS - 5);
+            ctx.lineTo(x + TS - 6, y + 5);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            ctx.strokeStyle = "rgba(15, 10, 29, 0.72)";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(x + 11, y + TS - 4);
+            ctx.lineTo(x + TS - 4, y + 9);
+            ctx.stroke();
+            ctx.fillStyle = "rgba(219, 230, 255, 0.24)";
+            ctx.fillRect(x + 8, y + 8, 2, 2);
+            ctx.fillStyle = "rgba(110, 226, 255, 0.18)";
+            ctx.fillRect(x + 22, y + 21, 2, 2);
+            ctx.restore();
+            continue;
+          }
+          if (!tiles[r][c]) continue;
           var dense = r < ROWS - 2 || (r % 6 === 5);
           var grad = ctx.createLinearGradient(x, y, x, y + TS);
           if (dense) {
@@ -2871,6 +2937,7 @@
       get cameraX() { return cameraX; },
       get cameraY() { return cameraY; },
       get tiles() { return tiles; },
+      get hazardTiles() { return hazardTiles; },
       get entities() { return entities; },
       get checkpoints() { return checkpoints; },
       get activeCheckpoint() { return activeCheckpoint; },
@@ -2892,9 +2959,11 @@
       step: step,
       clearEdges: clearEdges,
       isSolidTile: isSolidTile,
+      isHazardTile: isHazardTile,
       playerRect: playerRect,
       bottomHalfRect: bottomHalfRect,
       overlappingSolidTiles: overlappingSolidTiles,
+      overlappingHazardTiles: overlappingHazardTiles,
       overlappingSolidEntities: overlappingSolidEntities,
       overlappingSolidMatter: overlappingSolidMatter,
       overlappingMatter: overlappingMatter,
