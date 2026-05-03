@@ -1946,6 +1946,7 @@
 
     function consumeReboundExit() {
       if (player.queuedPermeate) {
+        var preserveChainBoost = player.queuedPermeateSource === "auto";
         player.state = "permeating";
         player.permeateUntilClear = false;
         player.permeateStartFeetY = player.y + CONFIG.PLAYER_H;
@@ -1953,7 +1954,7 @@
         player.queuedPermeate = false;
         player.queuedPermeateSource = null;
         player.reboundSurfaced = false;
-        player.reboundHorizontalBoostActive = false;
+        player.reboundHorizontalBoostActive = preserveChainBoost;
         player.embeddedDepth = 0;
         player.reboundMeterLevel = 0;
         return;

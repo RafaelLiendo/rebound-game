@@ -1034,6 +1034,52 @@ function testReboundHorizontalBoostDoublesMovement() {
   assert(Math.abs(g.player.vx) <= normalSpeed + eps, "normal movement stayed above max run speed after rebound boost ended");
 }
 
+function testCtrlChainReboundsKeepHorizontalBoost() {
+  const g = makeGame();
+  clearMeasurementWorld(g);
+
+  const rows = [36, 28];
+  const massHeight = 5;
+  for (const row of rows) paintTileBlock(g, row, 5, massHeight, 22);
+
+  const normalSpeed = g.CONFIG.MAX_RUN_SPEED;
+  const boostedSpeed = normalSpeed * g.CONFIG.REBOUND_HORIZONTAL_MULTIPLIER;
+  const eps = 0.001;
+
+  setPlayer(g, cellX(g, 15), standY(g, rows[0]), "solid");
+  press(g, "ShiftLeft");
+  step(g, 60);
+  assert(g.overlappingSolidTiles(g.playerRect()).length > 0, "Ctrl chain boost test never entered the first mass");
+
+  press(g, "ControlLeft");
+  press(g, "ArrowRight");
+
+  let reboundStarts = 0;
+  let previousState = g.player.state;
+  let secondReboundExceededNormal = false;
+  let secondReboundReachedChainLaunch = false;
+
+  for (let i = 0; i < 720; i++) {
+    step(g);
+    assert(g.player.state !== "stuck", "Ctrl chain horizontal boost entered stuck recovery");
+    assert(Math.abs(g.player.vx) <= boostedSpeed + eps, "Ctrl chain horizontal boost exceeded its doubled speed cap");
+
+    if (previousState !== "rebounding" && g.player.state === "rebounding") reboundStarts++;
+    if (reboundStarts >= 2 && g.player.reboundHorizontalBoostActive && Math.abs(g.player.vx) > normalSpeed + eps) {
+      secondReboundExceededNormal = true;
+    }
+    if (reboundStarts >= 2 && g.player.state !== "rebounding" && g.player.reboundHorizontalBoostActive && g.player.vy < 0) {
+      secondReboundReachedChainLaunch = true;
+      break;
+    }
+    previousState = g.player.state;
+  }
+
+  assert(reboundStarts >= 2, "Ctrl chain did not start a second rebound");
+  assert(secondReboundExceededNormal, "second Ctrl-chain rebound did not exceed normal run speed");
+  assert(secondReboundReachedChainLaunch, "second Ctrl-chain rebound boost did not persist into the upward chain launch");
+}
+
 function testUpperBodyOnlyReleaseDoesNotRebound() {
   const g = makeGame();
   clearMeasurementWorld(g);
@@ -1859,6 +1905,7 @@ const tests = [
   ["auto assist climbs tuned thick stack", testAutoAssistClimbsTunedThickStack],
   ["manual queue consumes on surface", testManualQueueConsumesOnSurface],
   ["rebound horizontal boost doubles movement", testReboundHorizontalBoostDoublesMovement],
+  ["Ctrl chain rebounds keep horizontal boost", testCtrlChainReboundsKeepHorizontalBoost],
   ["upper-body-only release waits until clear", testUpperBodyOnlyReleaseDoesNotRebound],
   ["ceiling hang without input stays pinned", testCeilingHangWithoutInputStaysPinned],
   ["ceiling hang Space latches center pull", testCeilingHangSpaceLatchesCenterPull],
