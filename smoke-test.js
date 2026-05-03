@@ -381,6 +381,80 @@ function oneTileGapChainImpossible(g, stackCount) {
   return stackCount > 1 && g.CONFIG.PLAYER_H > g.CONFIG.TILE_SIZE;
 }
 
+function safeAuthoredGapTiles(rawTiles) {
+  return Math.max(0, Math.floor(rawTiles - 0.10));
+}
+
+function measureNormalHorizontalJumpGaps(g) {
+  const launchSpeed = launchSpeedForRiseTilesForTest(g, LEVEL_REACH_LIMITS.normalJumpTiles);
+  return [0, 1, 2].map((riseTiles) => {
+    const frames = ascentFramesAtRise(g, launchSpeed, riseTiles);
+    const rawTiles = horizontalReachTilesForFrames(g, frames);
+    return {
+      riseTiles,
+      rawTiles,
+      safeTiles: safeAuthoredGapTiles(rawTiles)
+    };
+  });
+}
+
+function measureReboundHorizontalGaps(g) {
+  return [1, 2, 3, 4, 5].map((rows) => {
+    const riseTiles = bottomReboundLimitTiles(rows);
+    const launchSpeed = launchSpeedForRiseTilesForTest(g, riseTiles);
+    const frames = ascentFramesAtRise(g, launchSpeed, riseTiles);
+    const rawTiles = horizontalReachTilesForFrames(g, frames, g.CONFIG.REBOUND_HORIZONTAL_MULTIPLIER);
+    return {
+      rows,
+      riseTiles,
+      rawTiles,
+      safeTiles: safeAuthoredGapTiles(rawTiles)
+    };
+  });
+}
+
+function measureCeilingHangGap(g, gapRows) {
+  clearMeasurementWorld(g);
+  const floorRow = 34;
+  const ceilingRow = floorRow - gapRows - 1;
+  for (let c = 0; c < g.tiles[floorRow].length; c++) g.tiles[floorRow][c] = true;
+  paintTileBlock(g, ceilingRow, 14, 1, 3);
+
+  const startY = standY(g, floorRow);
+  setPlayer(g, cellX(g, 15), startY, "solid");
+  press(g, "Space");
+  step(g);
+  g.keys.ShiftLeft = true;
+  g.keyEdge.ShiftLeft = true;
+
+  let lowerOverlapSeen = false;
+  let bestY = startY;
+  for (let i = 0; i < 180; i++) {
+    step(g);
+    bestY = Math.min(bestY, g.player.y);
+    lowerOverlapSeen = lowerOverlapSeen || g.overlappingSolidTiles(g.bottomHalfRect(g.playerRect())).some((tile) => tile.r === ceilingRow);
+    if (g.ceilingHangInfo(g.playerRect()).active) {
+      return {
+        gapRows,
+        reachable: true,
+        lowerOverlapSeen,
+        peakRiseTiles: tilesFromPixels(g, startY - bestY)
+      };
+    }
+  }
+
+  return {
+    gapRows,
+    reachable: false,
+    lowerOverlapSeen,
+    peakRiseTiles: tilesFromPixels(g, startY - bestY)
+  };
+}
+
+function measureCeilingHangGaps(g) {
+  return [1, 2, 3, 4, 5].map((gapRows) => measureCeilingHangGap(g, gapRows));
+}
+
 function completeCurrentLevel(g) {
   setPlayer(g, g.goalRect.x, g.goalRect.y, "solid");
   step(g);
@@ -1614,6 +1688,9 @@ function testPlayerLimitMeasurements() {
   const normalJump = measureNormalJumpPeak(g);
   const terminalFall = measureFreeFallToTerminal(g);
   const terminalRows = findMaxTerminalVelocityPassThroughRows(g);
+  const normalHorizontalGaps = measureNormalHorizontalJumpGaps(g);
+  const reboundHorizontalGaps = measureReboundHorizontalGaps(g);
+  const ceilingHangGaps = measureCeilingHangGaps(g);
 
   for (let rows = 1; rows <= 5; rows++) {
     centerRebounds.push(measureReboundPeak(g, rows, "center", "release"));
@@ -1646,6 +1723,19 @@ function testPlayerLimitMeasurements() {
   assertApprox(normalJump, 2, heightTolerance, "normal jump target missed");
   assertApprox(terminalFall, 5, heightTolerance, "free fall to max-speed target missed");
   assert(terminalRows === 5, "terminal-speed pass-through target missed; expected 5 rows, got " + terminalRows);
+  assert(
+    normalHorizontalGaps.map((entry) => entry.safeTiles).join(",") === "5,4,3",
+    "normal horizontal safe gaps changed; got " + normalHorizontalGaps.map((entry) => entry.safeTiles).join(",")
+  );
+  assert(
+    reboundHorizontalGaps.map((entry) => entry.safeTiles).join(",") === "4,6,7,9,12",
+    "rebound horizontal safe gaps changed; got " + reboundHorizontalGaps.map((entry) => entry.safeTiles).join(",")
+  );
+  assert(ceilingHangGaps[0].reachable === false && ceilingHangGaps[0].lowerOverlapSeen === true, "1-tile ceiling gap should overlap too deeply for a clean hang");
+  assert(ceilingHangGaps[1].reachable === true, "2-tile ceiling gap should be reachable by normal jump into hang");
+  assert(ceilingHangGaps[2].reachable === true, "3-tile ceiling gap should be reachable by normal jump into hang");
+  assert(ceilingHangGaps[3].reachable === false, "4-tile ceiling gap should be beyond normal jump hang reach");
+  assert(ceilingHangGaps[4].reachable === false, "5-tile ceiling gap should be beyond normal jump hang reach");
 
   console.log("PLAYER LIMITS");
   console.log("  normal jump peak: " + formatTiles(normalJump) + " tiles");
@@ -1661,6 +1751,34 @@ function testPlayerLimitMeasurements() {
       "          | " + formatTiles(bottomAssistRebounds[i]) +
       "       | " + formatTiles(minimumFalls[i]) +
       "             | " + (chainPeaks[i] === null ? "impossible (32px gap < 40px player)" : formatTiles(chainPeaks[i]))
+    );
+  }
+  console.log("  normal horizontal jump gaps");
+  console.log("  rise | raw gap | safe authored gap");
+  for (const entry of normalHorizontalGaps) {
+    console.log(
+      "  " + entry.riseTiles +
+      "    | " + formatTiles(entry.rawTiles) +
+      "    | " + entry.safeTiles
+    );
+  }
+  console.log("  rebound horizontal gaps at full target rise (1.5x)");
+  console.log("  rows | target rise | raw gap | safe authored gap");
+  for (const entry of reboundHorizontalGaps) {
+    console.log(
+      "  " + entry.rows +
+      "    | " + formatTiles(entry.riseTiles) +
+      "        | " + formatTiles(entry.rawTiles) +
+      "    | " + entry.safeTiles
+    );
+  }
+  console.log("  ceiling hang vertical gaps");
+  console.log("  gap rows | result | peak rise");
+  for (const entry of ceilingHangGaps) {
+    console.log(
+      "  " + entry.gapRows +
+      "        | " + (entry.reachable ? "reachable" : entry.lowerOverlapSeen ? "too tight" : "too high") +
+      " | " + formatTiles(entry.peakRiseTiles)
     );
   }
 }
