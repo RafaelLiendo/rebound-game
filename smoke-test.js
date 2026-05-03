@@ -8,10 +8,25 @@ function makeGame() {
   const elements = {};
   function makeElement() {
     const classes = new Set();
+    const styleValues = {};
     return {
-      style: {},
+      style: {
+        setProperty(name, value) {
+          styleValues[name] = String(value);
+          this[name] = String(value);
+        },
+        removeProperty(name) {
+          delete styleValues[name];
+          delete this[name];
+        },
+        getPropertyValue(name) {
+          return styleValues[name] || "";
+        }
+      },
       attributes: {},
       textContent: "",
+      width: 0,
+      height: 0,
       classList: {
         add(name) {
           classes.add(name);
@@ -24,6 +39,9 @@ function makeGame() {
         }
       },
       addEventListener() {},
+      contains(target) {
+        return target === this;
+      },
       setPointerCapture() {},
       requestFullscreen() {
         global.document.fullscreenElement = this;
@@ -56,7 +74,13 @@ function makeGame() {
     };
   }
   const documentElement = makeElement();
-  global.window = { addEventListener() {}, innerWidth: 960, innerHeight: 540, gameInternals: null };
+  global.window = {
+    addEventListener() {},
+    innerWidth: 960,
+    innerHeight: 540,
+    visualViewport: null,
+    gameInternals: null
+  };
   Object.defineProperty(global, "navigator", {
     configurable: true,
     value: { maxTouchPoints: 0, standalone: false, userAgent: "Smoke", platform: "Win32" }
@@ -69,6 +93,7 @@ function makeGame() {
     addEventListener() {},
     querySelector(selector) {
       if (selector === ".shell") return makeElement();
+      if (selector === ".gameSurface") return elements.gameSurface || makeElement();
       return null;
     },
     getElementById(id) {
@@ -192,14 +217,17 @@ function testMobileShiftReleaseAtTopReleasesShiftAndCtrl() {
 }
 
 function testMobileHudCopyExplainsTouchControls() {
-  assert(html.includes("Hold Shift"), "mobile HUD copy does not explain holding Shift");
-  assert(html.includes("Release Shift"), "mobile HUD copy does not explain releasing Shift");
-  assert(html.includes("drag up to chain rebound"), "mobile HUD copy does not explain Shift drag-up chaining");
-  assert(html.includes('id="mobileShiftKnob" class="touchKnob">Hold</span>'), "mobile Shift button does not say Hold");
+  assert(html.includes('<strong>Hold</strong> to sink'), "mobile HUD copy does not explain holding to sink");
+  assert(html.includes('<strong>Release</strong> to rebound'), "mobile HUD copy does not explain releasing to rebound");
+  assert(html.includes('<strong>Drag up</strong> to chain rebound'), "mobile HUD copy does not explain drag-up chaining");
+  assert(!html.includes("Stick</span>"), "mobile HUD still explains the move stick");
+  assert(!html.includes("Hold Shift"), "mobile HUD still uses keyboard Shift wording");
+  assert(html.includes('class="touchKnob holdButtonGlyph"'), "mobile Shift button does not use the shared Hold glyph");
+  assert(html.includes('class="holdButtonGlyph holdButtonGlyphMini"'), "mobile HUD legend does not include a copy of the Hold glyph");
   assert(html.includes('content: "^"'), "mobile Shift button does not show an upward drag cue");
   assert(html.includes("mobileMode"), "mobile HUD does not have the robust mobile-mode fallback");
-  assert(html.includes("installHint"), "mobile install hint is missing");
-  assert(html.includes("iPhone: Share > Add to Home Screen for full screen."), "iPhone install hint copy is missing");
+  assert(!html.includes("installHint"), "mobile install hint should not be part of gameplay");
+  assert(!html.includes("Add to Home Screen for full screen"), "mobile gameplay still promises PWA fullscreen");
   assert(!html.includes("fullscreenButton"), "experimental fullscreen button should be removed");
   assert(!html.includes("requestGameFullscreen"), "experimental fullscreen API path should be removed");
   assert(html.includes("viewport-fit=cover"), "mobile viewport does not opt into safe-area fullscreen layout");
@@ -216,7 +244,7 @@ function testPwaManifestIsLinkedAndLandscapeFullscreen() {
   assert(manifest.icons.some((icon) => icon.src === "shadow-cat.png"), "manifest does not use shadow-cat icon");
 }
 
-function testIOSStandaloneDetectionForInstallHint() {
+function testIOSStandaloneDetectionRemainsAvailable() {
   const g = makeGame();
 
   global.navigator.userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)";
@@ -229,11 +257,62 @@ function testIOSStandaloneDetectionForInstallHint() {
   assert(g.isStandaloneWebApp() === true, "home-screen web app was not detected as standalone");
 }
 
+function testMobileGestureSuppressionHooks() {
+  assert(html.includes("overscroll-behavior: none"), "game surface does not suppress scroll chaining");
+  assert(html.includes("-webkit-touch-callout: none"), "game surface does not suppress iOS callouts");
+  assert(html.includes("-webkit-user-select: none"), "game surface does not suppress iOS text selection");
+  assert(html.includes("touch-action: none"), "game surface does not suppress browser touch gestures");
+  assert(html.includes('"gesturestart"'), "gesturestart is not blocked");
+  assert(html.includes('"gesturechange"'), "gesturechange is not blocked");
+  assert(html.includes('"gestureend"'), "gestureend is not blocked");
+  assert(html.includes('"selectstart"'), "selectstart is not blocked");
+  assert(html.includes('"dragstart"'), "dragstart is not blocked");
+  assert(html.includes('"contextmenu"'), "contextmenu is not blocked");
+  assert(html.includes("{ passive: false }"), "document gesture guards are not registered as non-passive");
+}
+
 function testCompactViewportEnablesMobileMode() {
   const g = makeGame();
   global.window.innerWidth = 844;
   global.window.innerHeight = 390;
   assert(g.detectCompactMobileViewport() === true, "landscape phone-sized viewport was not treated as mobile mode");
+}
+
+function testMobileViewportSizingUsesVisualViewport() {
+  const g = makeGame();
+  global.window.visualViewport = { width: 844, height: 390, offsetLeft: 0, offsetTop: 7, addEventListener() {} };
+
+  const viewport = g.mobileViewportRect();
+  assert(viewport.width === 844, "mobile viewport helper did not read visualViewport width");
+  assert(viewport.height === 390, "mobile viewport helper did not read visualViewport height");
+  assert(viewport.top === 7, "mobile viewport helper did not read visualViewport offset");
+
+  g.syncGameViewport(true);
+  assert(g.CONFIG.VIEW_H === 540, "mobile viewport changed logical height");
+  assert(g.CONFIG.VIEW_W === Math.round(540 * 844 / 390), "mobile viewport did not widen logical canvas");
+
+  g.syncGameViewport(false);
+  assert(g.CONFIG.VIEW_W === 960, "desktop viewport width was not restored");
+  assert(g.CONFIG.VIEW_H === 540, "desktop viewport height was not restored");
+}
+
+function testMobileReleaseAllClearsHeldVirtualKeys() {
+  const g = makeGame();
+  g.mobileInput.joystickStart(100, 100, 1);
+  g.mobileInput.joystickMove(140, 60, 1);
+  g.mobileInput.shiftStart(100, 2, 90);
+  g.mobileInput.shiftMove(60, 2);
+  g.clearEdges();
+
+  g.mobileInput.releaseAll();
+
+  assert(g.keys.ArrowRight === false, "releaseAll did not clear joystick horizontal input");
+  assert(g.keys.Space === false, "releaseAll did not clear joystick jump input");
+  assert(g.keys.ShiftLeft === false, "releaseAll did not clear Shift input");
+  assert(g.keys.ControlLeft === false, "releaseAll did not clear chain assist input");
+  assert(g.keyReleased.ArrowRight === true, "releaseAll did not emit joystick release");
+  assert(g.keyReleased.ShiftLeft === true, "releaseAll did not emit Shift release");
+  assert(g.keyReleased.ControlLeft === true, "releaseAll did not emit Ctrl release");
 }
 
 function testTapCompletionPromptAdvancesLevel() {
@@ -2840,8 +2919,11 @@ const tests = [
   ["mobile Shift release at top releases Shift and Ctrl", testMobileShiftReleaseAtTopReleasesShiftAndCtrl],
   ["mobile HUD copy explains touch controls", testMobileHudCopyExplainsTouchControls],
   ["PWA manifest is linked and landscape fullscreen", testPwaManifestIsLinkedAndLandscapeFullscreen],
-  ["iOS standalone detection for install hint", testIOSStandaloneDetectionForInstallHint],
+  ["iOS standalone detection remains available", testIOSStandaloneDetectionRemainsAvailable],
+  ["mobile gesture suppression hooks", testMobileGestureSuppressionHooks],
   ["compact viewport enables mobile mode", testCompactViewportEnablesMobileMode],
+  ["mobile viewport sizing uses visualViewport", testMobileViewportSizingUsesVisualViewport],
+  ["mobile releaseAll clears held virtual keys", testMobileReleaseAllClearsHeldVirtualKeys],
   ["tap completion prompt advances level", testTapCompletionPromptAdvancesLevel],
   ["tap final completion prompt restarts checkpoint", testTapFinalCompletionPromptRestartsCheckpoint],
   ["load level recalculates map", testLoadLevelRecalculatesMap],

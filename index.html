@@ -20,13 +20,23 @@
 
     * {
       box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
     }
 
     html,
     body {
+      position: fixed;
+      inset: 0;
       width: 100%;
+      height: 100%;
       min-height: 100%;
       margin: 0;
+      overflow: hidden;
+      overscroll-behavior: none;
+      touch-action: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
     }
 
     body {
@@ -44,12 +54,31 @@
         sans-serif;
     }
 
+    .gameSurface {
+      position: relative;
+      display: grid;
+      width: 100%;
+      height: 100%;
+      place-items: center;
+      overflow: hidden;
+      overscroll-behavior: none;
+      touch-action: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+    }
+
     .shell {
       position: relative;
       width: min(100vw - 36px, 1180px);
       aspect-ratio: 16 / 9;
       min-height: 280px;
       max-height: calc(100vh - 36px);
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
     }
 
     canvas {
@@ -63,6 +92,10 @@
         0 24px 70px rgba(0, 0, 0, 0.56),
         0 0 42px rgba(93, 208, 255, 0.14),
         inset 0 0 40px rgba(180, 72, 255, 0.08);
+      touch-action: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
     }
 
     .hud {
@@ -77,6 +110,10 @@
       gap: 20px;
       align-items: start;
       pointer-events: none;
+      touch-action: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
     }
 
     .readout,
@@ -253,7 +290,10 @@
       z-index: 5;
       inset: 0;
       pointer-events: none;
+      touch-action: none;
       user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
     }
 
     .touchControl {
@@ -269,6 +309,9 @@
       opacity: 0.48;
       pointer-events: auto;
       touch-action: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
       transition: opacity 120ms ease, border-color 120ms ease, background 120ms ease;
     }
 
@@ -297,26 +340,6 @@
       text-transform: uppercase;
     }
 
-    .installHint {
-      position: absolute;
-      left: 50%;
-      bottom: max(24px, calc(env(safe-area-inset-bottom) + 18px));
-      display: none;
-      width: min(42vw, 310px);
-      padding: 7px 10px;
-      border: 1px solid rgba(155, 221, 255, 0.36);
-      border-radius: 8px;
-      background: rgba(8, 10, 28, 0.64);
-      color: var(--ink);
-      font-size: clamp(10px, 2vmin, 12px);
-      font-weight: 750;
-      line-height: 1.2;
-      text-align: center;
-      transform: translateX(-50%);
-      pointer-events: none;
-      backdrop-filter: blur(10px);
-    }
-
     .touchKnob {
       width: 42%;
       height: 42%;
@@ -329,15 +352,23 @@
       pointer-events: none;
     }
 
-    .mobileShift .touchKnob {
+    .holdButtonGlyph {
+      position: relative;
       display: grid;
       place-items: center;
+      color: rgba(246, 243, 255, 0.84);
+      font-weight: 900;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    .mobileShift .touchKnob {
       width: 68%;
       height: 68%;
       background: rgba(246, 243, 255, 0.13);
     }
 
-    .mobileShift .touchKnob::before {
+    .holdButtonGlyph::before {
       position: absolute;
       top: -18px;
       color: rgba(246, 243, 255, 0.82);
@@ -345,6 +376,48 @@
       font-size: 17px;
       line-height: 1;
       text-shadow: 0 0 10px rgba(75, 231, 255, 0.58);
+    }
+
+    .holdButtonGlyphMini {
+      flex: 0 0 auto;
+      width: 42px;
+      height: 42px;
+      border: 1px solid rgba(155, 221, 255, 0.34);
+      border-radius: 999px;
+      background: rgba(8, 12, 30, 0.2);
+      box-shadow: inset 0 0 18px rgba(246, 243, 255, 0.05);
+      font-size: 8px;
+    }
+
+    .holdButtonGlyphMini::before {
+      top: -10px;
+      font-size: 11px;
+    }
+
+    .holdButtonLabel {
+      display: grid;
+      width: 70%;
+      height: 70%;
+      place-items: center;
+      border: 1px solid rgba(246, 243, 255, 0.3);
+      border-radius: 999px;
+      background: rgba(246, 243, 255, 0.13);
+      line-height: 1;
+    }
+
+    .mobileHoldCopy {
+      display: grid;
+      gap: 2px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 750;
+      line-height: 1.1;
+      white-space: nowrap;
+    }
+
+    .mobileHoldCopy strong {
+      color: var(--ink);
+      font-weight: 900;
     }
 
     .rotatePrompt {
@@ -374,14 +447,30 @@
       }
     }
 
+    .mobileMode body {
+      padding: 0;
+    }
+
+    .mobileMode .gameSurface {
+      position: fixed;
+      left: var(--game-viewport-left, 0px);
+      top: var(--game-viewport-top, 0px);
+      width: var(--game-viewport-w, 100vw);
+      height: var(--game-viewport-h, 100dvh);
+    }
+
     @media (orientation: landscape) {
-      .mobileMode body {
-        padding: 0;
+      .mobileMode .shell {
+        width: 100%;
+        height: 100%;
+        max-height: none;
+        min-height: 0;
+        aspect-ratio: auto;
       }
 
-      .mobileMode .shell {
-        width: min(100vw, calc(100dvh * 16 / 9));
-        max-height: 100dvh;
+      .mobileMode canvas {
+        border: 0;
+        border-radius: 0;
       }
 
       .mobileMode .mobileControls {
@@ -403,6 +492,9 @@
     @media (orientation: portrait) {
       .mobileMode .rotatePrompt {
         display: grid;
+        position: fixed;
+        border: 0;
+        border-radius: 0;
       }
     }
 
@@ -514,12 +606,10 @@
       }
 
       .mobileMode .controls {
-        display: grid;
-        grid-template-rows: repeat(2, minmax(0, 1fr));
-        grid-auto-flow: column;
-        gap: 4px 10px;
-        max-width: min(56vw, 440px);
-        padding: 7px 9px;
+        display: flex;
+        gap: 8px;
+        max-width: min(46vw, 310px);
+        padding: 7px 10px 7px 9px;
         font-size: 10px;
       }
 
@@ -544,19 +634,12 @@
       .mobileMode .control-hint {
         font-size: 9px;
       }
-
-      .mobileMode.iosBrowser .installHint {
-        display: block;
-      }
-
-      .mobileMode.standaloneMode .installHint {
-        display: none;
-      }
     }
   </style>
 </head>
 <body>
-  <main class="shell">
+  <main id="gameSurface" class="gameSurface">
+  <div class="shell">
     <canvas id="game" width="960" height="540" aria-label="Permeation buoyancy game demo"></canvas>
     <section class="hud" aria-label="Game status">
       <div class="readout">
@@ -603,32 +686,12 @@
             <span class="control-hint">Permeate/Rebound</span>
           </span>
         </span>
-        <span class="control mobileControl">
-          <span class="key">Stick</span>
-          <span class="control-copy">
-            <span class="control-name">Move</span>
-            <span class="control-hint">drag up to jump</span>
-          </span>
-        </span>
-        <span class="control mobileControl">
-          <span class="key">Shift</span>
-          <span class="control-copy">
-            <span class="control-name">Hold Shift</span>
-            <span class="control-hint">sink into matter</span>
-          </span>
-        </span>
-        <span class="control mobileControl">
-          <span class="key">Lift</span>
-          <span class="control-copy">
-            <span class="control-name">Release Shift</span>
-            <span class="control-hint">rebound upward</span>
-          </span>
-        </span>
-        <span class="control mobileControl">
-          <span class="key">Shift up</span>
-          <span class="control-copy">
-            <span class="control-name">Chain</span>
-            <span class="control-hint">drag up to chain rebound</span>
+        <span class="control mobileControl mobileHoldLegend">
+          <span class="holdButtonGlyph holdButtonGlyphMini" aria-hidden="true"><span class="holdButtonLabel">Hold</span></span>
+          <span class="mobileHoldCopy">
+            <span><strong>Hold</strong> to sink</span>
+            <span><strong>Release</strong> to rebound</span>
+            <span><strong>Drag up</strong> to chain rebound</span>
           </span>
         </span>
       </div>
@@ -638,11 +701,11 @@
         <span id="mobileJoystickKnob" class="touchKnob" aria-hidden="true"></span>
       </div>
       <div id="mobileShift" class="touchControl mobileShift" role="button" aria-label="Hold; drag up to chain rebound">
-        <span id="mobileShiftKnob" class="touchKnob">Hold</span>
+        <span id="mobileShiftKnob" class="touchKnob holdButtonGlyph"><span class="holdButtonLabel">Hold</span></span>
       </div>
-      <div id="installHint" class="installHint" aria-live="polite">iPhone: Share > Add to Home Screen for full screen.</div>
     </div>
     <div class="rotatePrompt" aria-hidden="true">Rotate to landscape</div>
+  </div>
   </main>
   <script>
   (function () {
@@ -682,7 +745,10 @@
     };
 
     var TS = CONFIG.TILE_SIZE;
+    var BASE_VIEW_W = CONFIG.VIEW_W;
+    var BASE_VIEW_H = CONFIG.VIEW_H;
     var root = document.documentElement;
+    var gameSurface = document.getElementById("gameSurface");
     var shell = document.querySelector ? document.querySelector(".shell") : null;
     var canvas = document.getElementById("game");
     var ctx = canvas.getContext("2d");
@@ -722,6 +788,59 @@
         Math.max(window.innerWidth || 0, window.innerHeight || 0) <= 980;
     }
 
+    function mobileViewportRect() {
+      var viewport = window.visualViewport || null;
+      var width = viewport && viewport.width ? viewport.width : (window.innerWidth || BASE_VIEW_W);
+      var height = viewport && viewport.height ? viewport.height : (window.innerHeight || BASE_VIEW_H);
+      return {
+        width: Math.max(1, Math.round(width)),
+        height: Math.max(1, Math.round(height)),
+        left: Math.round(viewport && viewport.offsetLeft ? viewport.offsetLeft : 0),
+        top: Math.round(viewport && viewport.offsetTop ? viewport.offsetTop : 0)
+      };
+    }
+
+    function mobileLogicalWidthForViewport(width, height) {
+      if (!height) return BASE_VIEW_W;
+      return Math.max(BASE_VIEW_W, Math.round(BASE_VIEW_H * width / height));
+    }
+
+    function setGameSurfaceVar(name, value) {
+      if (gameSurface && gameSurface.style) gameSurface.style.setProperty(name, value);
+    }
+
+    function clearGameSurfaceVar(name) {
+      if (gameSurface && gameSurface.style) gameSurface.style.removeProperty(name);
+    }
+
+    function syncGameViewport(mobileMode) {
+      var viewport = mobileViewportRect();
+      var landscape = viewport.width >= viewport.height;
+      if (mobileMode && landscape) {
+        CONFIG.VIEW_H = BASE_VIEW_H;
+        CONFIG.VIEW_W = mobileLogicalWidthForViewport(viewport.width, viewport.height);
+        if (canvas) {
+          canvas.width = CONFIG.VIEW_W;
+          canvas.height = CONFIG.VIEW_H;
+        }
+        setGameSurfaceVar("--game-viewport-w", viewport.width + "px");
+        setGameSurfaceVar("--game-viewport-h", viewport.height + "px");
+        setGameSurfaceVar("--game-viewport-left", viewport.left + "px");
+        setGameSurfaceVar("--game-viewport-top", viewport.top + "px");
+      } else {
+        CONFIG.VIEW_W = BASE_VIEW_W;
+        CONFIG.VIEW_H = BASE_VIEW_H;
+        if (canvas) {
+          canvas.width = CONFIG.VIEW_W;
+          canvas.height = CONFIG.VIEW_H;
+        }
+        clearGameSurfaceVar("--game-viewport-w");
+        clearGameSurfaceVar("--game-viewport-h");
+        clearGameSurfaceVar("--game-viewport-left");
+        clearGameSurfaceVar("--game-viewport-top");
+      }
+    }
+
     function syncMobileModeClasses() {
       if (!root || !root.classList) return;
       var touchMode = detectTouchMode();
@@ -746,11 +865,39 @@
       } else {
         root.classList.remove("standaloneMode");
       }
+      syncGameViewport(mobileMode);
     }
 
     syncMobileModeClasses();
     window.addEventListener("resize", syncMobileModeClasses);
     window.addEventListener("orientationchange", syncMobileModeClasses);
+    if (window.visualViewport && window.visualViewport.addEventListener) {
+      window.visualViewport.addEventListener("resize", syncMobileModeClasses);
+      window.visualViewport.addEventListener("scroll", syncMobileModeClasses);
+    }
+
+    function gameSurfaceContains(target) {
+      if (!gameSurface || !gameSurface.contains) return true;
+      return target === gameSurface || gameSurface.contains(target);
+    }
+
+    function preventGameDocumentGesture(ev) {
+      if (!ev || gameSurfaceContains(ev.target)) ev.preventDefault();
+    }
+
+    function addBlockingDocumentListener(type) {
+      document.addEventListener(type, preventGameDocumentGesture, { passive: false });
+    }
+
+    [
+      "touchmove",
+      "gesturestart",
+      "gesturechange",
+      "gestureend",
+      "selectstart",
+      "dragstart",
+      "contextmenu"
+    ].forEach(addBlockingDocumentListener);
 
     // === LEVEL DATA ===
     function defined(value, fallback) {
@@ -1770,6 +1917,11 @@
         setActive(shift, false);
       }
 
+      function releaseAll() {
+        endJoystick();
+        endShift();
+      }
+
       function joystickStart(x, y, pointerId) {
         if (joystickState.pointerId !== null) return;
         joystickState.pointerId = pointerId === undefined ? "test" : pointerId;
@@ -1858,13 +2010,24 @@
         });
       }
 
+      document.addEventListener("pointerup", function (ev) {
+        joystickEnd(ev.pointerId);
+        shiftEnd(ev.pointerId);
+      }, { passive: false });
+      document.addEventListener("pointercancel", function (ev) {
+        joystickEnd(ev.pointerId);
+        shiftEnd(ev.pointerId);
+      }, { passive: false });
+      window.addEventListener("blur", releaseAll);
+
       return {
         joystickStart: joystickStart,
         joystickMove: joystickMove,
         joystickEnd: joystickEnd,
         shiftStart: shiftStart,
         shiftMove: shiftMove,
-        shiftEnd: shiftEnd
+        shiftEnd: shiftEnd,
+        releaseAll: releaseAll
       };
     }
 
@@ -3602,6 +3765,9 @@
       detectIOS: detectIOS,
       isStandaloneWebApp: isStandaloneWebApp,
       detectCompactMobileViewport: detectCompactMobileViewport,
+      mobileViewportRect: mobileViewportRect,
+      mobileLogicalWidthForViewport: mobileLogicalWidthForViewport,
+      syncGameViewport: syncGameViewport,
       isFinalLevel: isFinalLevel,
       updateCamera: updateCamera,
       renderOnly: renderOnly,
