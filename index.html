@@ -1866,14 +1866,15 @@
 
     function consumeReboundExit() {
       if (player.queuedPermeate) {
-        var preserveChainBoost = player.queuedPermeateSource === "auto";
+        var queuedSource = player.queuedPermeateSource;
+        var preserveChainBoost = queuedSource === "auto";
         player.state = "permeating";
         player.permeateUntilClear = false;
         player.permeateStartFeetY = player.y + CONFIG.PLAYER_H;
         player.ceilingPullMode = null;
         player.queuedPermeate = false;
         player.queuedPermeateSource = null;
-        if (chainMatterAhead()) player.chainLocked = true;
+        if (chainMatterAhead() || (queuedSource === "manual" && permeateHeld())) player.chainLocked = true;
         player.reboundSurfaced = false;
         player.reboundAirborneTimer = preserveChainBoost ? CONFIG.REBOUND_STATE_DURATION : 0;
         player.embeddedDepth = 0;

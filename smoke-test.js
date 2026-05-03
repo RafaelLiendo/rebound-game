@@ -1392,6 +1392,62 @@ function testManualQueueConsumesOnSurface() {
   assert(surfaced, "player never surfaced during rebound");
 }
 
+function testHeldShiftManualChainPullsThroughCeilingHang() {
+  const g = makeGame();
+  clearMeasurementWorld(g);
+
+  paintTileBlock(g, 36, 10, 5, 5);
+  paintTileBlock(g, 24, 10, 5, 5);
+
+  setPlayer(g, cellX(g, 12), 41 * g.CONFIG.TILE_SIZE - g.CONFIG.PLAYER_H, "solid");
+
+  press(g, "ShiftLeft");
+  step(g, 60);
+  assert(g.overlappingSolidTiles(g.playerRect()).length > 0, "held Shift chain never entered the first mass");
+
+  release(g, "ShiftLeft");
+  step(g);
+  assert(g.player.state === "rebounding", "held Shift chain did not start the first rebound");
+
+  press(g, "ShiftLeft");
+  step(g);
+  assert(g.player.queuedPermeate === true, "held Shift chain did not manually queue permeation");
+  assert(g.player.queuedPermeateSource === "manual", "held Shift chain did not record a manual queue");
+
+  let consumedManualQueue = false;
+  let sawCeilingHang = false;
+  let sawCeilingPull = false;
+  let secondRebound = false;
+  let previousState = g.player.state;
+
+  for (let i = 0; i < 300; i++) {
+    step(g);
+
+    assert(g.keys.ShiftLeft === true, "held Shift chain lost the Shift hold");
+    assert(g.player.state !== "solid", "held Shift chain became solid while Shift was still held");
+    assert(g.player.state !== "stuck", "held Shift chain entered stuck recovery");
+
+    if (previousState === "rebounding" && g.player.state === "permeating") {
+      consumedManualQueue = true;
+      assert(g.player.queuedPermeate === false, "held Shift chain did not consume the manual queue");
+      assert(g.player.reboundAirborneTimer === 0, "manual held Shift chain preserved auto-chain boost");
+    }
+    if (consumedManualQueue && g.ceilingHangInfo(g.playerRect()).active) sawCeilingHang = true;
+    if (consumedManualQueue && g.player.ceilingPullMode !== null) sawCeilingPull = true;
+    if (consumedManualQueue && previousState !== "rebounding" && g.player.state === "rebounding") {
+      secondRebound = true;
+      break;
+    }
+
+    previousState = g.player.state;
+  }
+
+  assert(consumedManualQueue, "held Shift chain never consumed the manual queue on surfacing");
+  assert(sawCeilingHang, "held Shift chain did not diagnose the top-half ceiling-hang overlap");
+  assert(sawCeilingPull, "held Shift chain did not pull through the ceiling hang");
+  assert(secondRebound, "held Shift chain did not rebound after the ceiling-hang overlap");
+}
+
 function testManualTapChainKeepsQueuedPermeation() {
   const g = makeGame();
   const temp = loadTemporaryLevel(g, bugOneChainFixture());
@@ -2562,6 +2618,7 @@ const tests = [
   ["bug 2 tall mass rebounds once", testBugTwoTallMassReboundsOnce],
   ["auto assist climbs tuned thick stack", testAutoAssistClimbsTunedThickStack],
   ["manual queue consumes on surface", testManualQueueConsumesOnSurface],
+  ["held Shift manual chain pulls through ceiling hang", testHeldShiftManualChainPullsThroughCeilingHang],
   ["manual tap chain keeps queued permeation", testManualTapChainKeepsQueuedPermeation],
   ["manual rhythm chain completes bug fixture without Ctrl", testManualRhythmChainCompletesFirstLevelWithoutCtrl],
   ["manual chain completes bug fixture without further input", testManualChainCompletesFirstLevelWithoutFurtherInput],
