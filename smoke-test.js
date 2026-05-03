@@ -105,6 +105,8 @@ function setPlayer(g, x, y, state = "solid") {
   p.queuedPermeateSource = null;
   p.permeateUntilClear = false;
   p.permeateStartFeetY = state === "permeating" ? y + g.CONFIG.PLAYER_H : null;
+  p.ceilingPullLatched = false;
+  p.ceilingAssistActive = false;
   p.embeddedDepth = 0;
   p.reboundMeterLevel = 0;
   p.reboundStrength = 0;
@@ -1017,6 +1019,110 @@ function testUpperBodyOnlyReleaseDoesNotRebound() {
   assert(g.player.reboundSurfaced === false, "upper-body-only release behaved like a rebound");
 }
 
+function buildCeilingHangFixture(g) {
+  clearMeasurementWorld(g);
+  const row = 20;
+  const leftCol = 10;
+  paintTileBlock(g, row, leftCol, 1, 3);
+
+  const topY = row * g.CONFIG.TILE_SIZE;
+  const bottomY = (row + 1) * g.CONFIG.TILE_SIZE;
+  const startY = bottomY - 15;
+  setPlayer(g, cellX(g, leftCol + 1), startY, "permeating");
+  return {
+    row,
+    leftCol,
+    topY,
+    bottomY,
+    startY,
+    exitY: topY - g.CONFIG.PLAYER_H
+  };
+}
+
+function testCeilingHangWithoutInputStaysPinned() {
+  const g = makeGame();
+  const fixture = buildCeilingHangFixture(g);
+
+  g.player.vy = 4;
+  assert(g.ceilingHangInfo(g.playerRect()).active === true, "ceiling hang fixture did not start in top-half-only matter");
+  assert(g.bottomHalfOverlapsSolid(g.playerRect()) === false, "ceiling hang fixture started with lower-body overlap");
+
+  for (let i = 0; i < 30; i++) {
+    step(g);
+    assert(g.player.state === "permeating", "ceiling hang left permeating without input");
+    assert(g.player.reboundSurfaced === false, "ceiling hang behaved like a rebound without input");
+    assert(g.bottomHalfOverlapsSolid(g.playerRect()) === false, "ceiling hang drifted into lower-body matter without input");
+    assertNear(g.player.y, fixture.startY, "ceiling hang moved vertically without input");
+    assertNear(g.player.vy, 0, "ceiling hang kept vertical speed without input");
+  }
+}
+
+function testCeilingHangSpaceLatchesCenterPull() {
+  const g = makeGame();
+  const fixture = buildCeilingHangFixture(g);
+
+  press(g, "Space");
+  step(g);
+  release(g, "Space");
+
+  assert(g.player.ceilingPullLatched === true, "Space did not latch ceiling-hang pull");
+  assert(g.player.jumpBufferTimer === 0, "Space ceiling pull left a jump buffered");
+  assert(g.player.y < fixture.startY, "Space ceiling pull did not move toward the mass center");
+  assert(g.player.state === "permeating", "Space ceiling pull changed state immediately");
+
+  let lowerEntered = false;
+  for (let i = 0; i < 80; i++) {
+    step(g);
+    assert(g.player.state === "permeating", "Space ceiling pull triggered an unwanted rebound");
+    if (g.bottomHalfOverlapsSolid(g.playerRect())) {
+      lowerEntered = true;
+      break;
+    }
+  }
+
+  assert(lowerEntered, "Space ceiling pull never reached normal lower-body permeation");
+  step(g);
+  assert(g.player.ceilingPullLatched === false, "Space ceiling pull did not clear after lower-body matter overlap");
+  assert(g.player.state === "permeating", "Space ceiling pull did not remain in normal permeation");
+}
+
+function testCeilingHangCtrlPullsThenReboundsWhenFullyInside() {
+  const g = makeGame();
+  const fixture = buildCeilingHangFixture(g);
+
+  press(g, "ControlLeft");
+  step(g);
+
+  assert(g.player.ceilingAssistActive === true, "Ctrl did not arm ceiling-hang assist");
+  assert(g.player.y < fixture.startY, "Ctrl ceiling assist did not pull toward the mass center");
+  assert(g.player.state === "permeating", "Ctrl ceiling assist rebounded before lower-body entry");
+
+  let sawPartialLowerEntry = false;
+  let rebounded = false;
+  for (let i = 0; i < 120; i++) {
+    step(g);
+    const lowerOverlap = g.bottomHalfOverlapsSolid(g.playerRect());
+    const fullyInside = g.bottomHalfFullyInsideMatter(g.playerRect());
+
+    if (lowerOverlap && !fullyInside && g.player.state === "permeating") {
+      sawPartialLowerEntry = true;
+    }
+    if (sawPartialLowerEntry && lowerOverlap && !fullyInside) {
+      assert(g.player.state !== "rebounding", "Ctrl ceiling assist rebounded on first lower-body contact");
+    }
+    if (g.player.state === "rebounding") {
+      rebounded = true;
+      assert(sawPartialLowerEntry, "Ctrl ceiling assist did not wait past first lower-body contact");
+      assert(g.player.reboundExitY === fixture.exitY, "Ctrl ceiling assist did not use the normal rebound exit");
+      assert(g.player.reboundTargetRiseTiles > 0, "Ctrl ceiling assist did not use target-based rebound tuning");
+      assert(g.player.reboundLaunchVelocity > 0, "Ctrl ceiling assist did not compute a rebound launch velocity");
+      break;
+    }
+  }
+
+  assert(rebounded, "Ctrl ceiling assist did not rebound after the lower half became fully embedded");
+}
+
 function testBlockedUpwardEscapeBecomesStuck() {
   const g = makeGame();
   clearMeasurementWorld(g);
@@ -1717,6 +1823,9 @@ const tests = [
   ["auto assist climbs tuned thick stack", testAutoAssistClimbsTunedThickStack],
   ["manual queue consumes on surface", testManualQueueConsumesOnSurface],
   ["upper-body-only release waits until clear", testUpperBodyOnlyReleaseDoesNotRebound],
+  ["ceiling hang without input stays pinned", testCeilingHangWithoutInputStaysPinned],
+  ["ceiling hang Space latches center pull", testCeilingHangSpaceLatchesCenterPull],
+  ["ceiling hang Ctrl rebounds once fully inside", testCeilingHangCtrlPullsThenReboundsWhenFullyInside],
   ["blocked upward escape recovers from stuck", testBlockedUpwardEscapeBecomesStuck],
   ["permeation center pull uses tuned accel", testPermeationCenterPullUsesTunedAccel],
   ["thin mass keeps existing rebound curve", testThinMassKeepsExistingReboundCurve],
