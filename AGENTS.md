@@ -40,6 +40,8 @@ There is no build step. `index.html` can be opened directly in a browser.
 - Preserve the existing fixed-step simulation style in `step(dt)`.
 - The tile map uses 32 px cells and string rows:
   - `#` = solid terrain
+  - `/` = non-solid hazard scar; touching it recovers the player to the
+    largest checkpoint reached
   - `.` = empty space
   - `0` = player spawn and checkpoint zero
   - `@` = goal
@@ -66,6 +68,9 @@ There is no build step. `index.html` can be opened directly in a browser.
   `checkpoints`, and `entities`. Keep marker parsing there; `parseLevel()`
   should only rebuild terrain and dimensions. Use `loadLevel(index)` rather
   than mutating map globals directly.
+- Keep `/` hazard tiles authored directly in map rows and detected from the
+  active `LEVEL`; do not duplicate them into a separate parsed grid. They must
+  remain outside solid collision, permeation, rebound, and reachability matter.
 - Different levels may have different row and column counts. Within a single
   level, every map row must have the same number of columns; `parseLevel()`
   throws an error for uneven row widths.
@@ -175,6 +180,8 @@ Add smoke coverage when changing:
 
 - player state transitions
 - collision or tile parsing
+- hazard recovery tiles, including checkpoint-preserving respawn and non-solid
+  behavior
 - dynamic matter, moving platforms, asteroids, or checkpoints
 - rebound/stuck behavior
 - shallow manual chain-lock behavior, including no-input completion of the

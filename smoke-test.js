@@ -1210,7 +1210,6 @@ function testSlashHazardRecoversToActiveCheckpointAndStaysNonsolid() {
 
   try {
     g.loadLevel(index);
-    assert(g.hazardTiles[35][16] === true, "slash marker was not parsed as a hazard tile");
     assert(g.isHazardTile(16, 35), "slash hazard tile lookup failed");
     assert(!g.isSolidTile(16, 35), "slash hazard was treated as solid terrain");
 

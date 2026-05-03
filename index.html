@@ -1096,7 +1096,6 @@
     var levelH = 0;
     var levelW = 0;
     var tiles = [];
-    var hazardTiles = [];
     var entities = [];
     var checkpoints = [];
     var activeCheckpoint = { order: 0, name: "spawn", c: 1, r: 43, x: TS, y: 43 * TS };
@@ -1118,14 +1117,11 @@
       levelH = ROWS * TS;
       levelW = COLS * TS;
       tiles.length = 0;
-      hazardTiles.length = 0;
       for (var r = 0; r < ROWS; r++) {
         tiles[r] = [];
-        hazardTiles[r] = [];
         for (var c = 0; c < COLS; c++) {
           var ch = LEVEL[r][c];
           tiles[r][c] = ch === "#";
-          hazardTiles[r][c] = ch === "/";
         }
       }
     }
@@ -1419,7 +1415,7 @@
 
     function isHazardTile(c, r) {
       if (c < 0 || c >= COLS || r < 0 || r >= ROWS) return false;
-      return !!hazardTiles[r][c];
+      return LEVEL[r][c] === "/";
     }
 
     function playerRect() {
@@ -2519,7 +2515,7 @@
         for (var c = 0; c < COLS; c++) {
           var x = c * TS;
           var y = r * TS;
-          if (hazardTiles[r][c]) {
+          if (isHazardTile(c, r)) {
             var hazardGrad = ctx.createLinearGradient(x, y, x, y + TS);
             hazardGrad.addColorStop(0, "#201634");
             hazardGrad.addColorStop(0.56, "#100d21");
@@ -2937,7 +2933,6 @@
       get cameraX() { return cameraX; },
       get cameraY() { return cameraY; },
       get tiles() { return tiles; },
-      get hazardTiles() { return hazardTiles; },
       get entities() { return entities; },
       get checkpoints() { return checkpoints; },
       get activeCheckpoint() { return activeCheckpoint; },
