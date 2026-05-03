@@ -80,10 +80,12 @@ There is no build step. `index.html` can be opened directly in a browser.
   prefer fixing unreachable gaps in the map over loosening the audit.
 - If level switching changes, keep `window.gameInternals` useful for tests by
   exposing live getters for active level data, dimensions, and camera position.
-- Rebound tuning is intentionally target-based. `reboundTargetRiseTiles()`
-  maps lower-body depth and mass height to the measured jump/rebound table, and
-  the launch-speed helper converts that target into fixed-step motion. Prefer
-  extending this model over adding separate deep-bonus formulas.
+- Rebound tuning is intentionally target-based. `reboundDepthLevel()` maps
+  lower-body depth and capped mass height to a `0.0` to `5.0` depth scale, and
+  `reboundTargetRiseTiles()` converts that depth level into target height with
+  `2^(n - 1) + n`. The launch-speed helper then converts that target into
+  fixed-step motion. Prefer extending this model over adding separate deep-bonus
+  formulas.
 - Rebound targets are measured from the planned top exit, `reboundExitY`, not
   from the release depth. While rebounding, the player phases upward until the
   planned exit, then receives the launch velocity for the full target rise.
@@ -93,12 +95,13 @@ There is no build step. `index.html` can be opened directly in a browser.
   at the planned exit. Do not let Ctrl+Shift preserve the artificial surfacing
   speed as extra rebound height; keep smoke coverage comparing release and
   Ctrl+Shift rebound peaks, plus chain responsiveness.
-- The HUD rebound-depth meter is display-only. `reboundMeterLevel()` maps
-  lower-body depth and capped mass height to a readable `0.0` to `5.0` scale
-  for the meter and visual effects; it must not change rebound launch physics.
-  Keep the meter visually represented by five structural segments rather than
-  pixel-sized repeating backgrounds, so the displayed divisions stay aligned
-  with the five-tile maximum at any HUD scale.
+- The shared rebound depth scale is capped at five rows. Depths beyond that cap
+  must still target a 21-tile rebound from the planned top exit. Keep smoke
+  coverage for over-cap masses in the player limit measurements.
+- The HUD rebound-depth meter should display the same capped depth scale via
+  `reboundMeterLevel()`. Keep the meter visually represented by five structural
+  segments rather than pixel-sized repeating backgrounds, so the displayed
+  divisions stay aligned with the five-tile maximum at any HUD scale.
 - Permeation pass-through is also target-based: short falls should be resisted
   by drag, center pull, and bottom brake, while falls that meet the tuned tile
   threshold should carry through. Keep max-speed entry through static matter

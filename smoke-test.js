@@ -440,7 +440,7 @@ const LEVEL_REACH_LIMITS = {
   normalJumpTiles: 2,
   maxPassThroughRows: 5,
   minimumClearanceRows: 2,
-  bottomReboundByRows: [0, 2, 4, 8, 16, 32],
+  bottomReboundByRows: [0, 2, 4, 7, 12, 21],
   minimumFallThroughByRows: [0, 2, 4, 5, 5, 5]
 };
 
@@ -889,7 +889,7 @@ function testBugTwoTallMassReboundsOnce() {
 
     const rebound = g.shouldRebound(g.playerRect());
     assert(rebound.fire === true, "bug 2 tall mass did not allow " + mode + " rebound");
-    assertApprox(rebound.targetRiseTiles, 32, 0.001, "bug 2 tall mass did not use capped 5-row " + mode + " rebound tuning");
+    assertApprox(rebound.targetRiseTiles, 21, 0.001, "bug 2 tall mass did not use capped 5-row " + mode + " rebound tuning");
 
     activateRebound(g, mode);
     let reboundStarts = g.player.state === "rebounding" ? 1 : 0;
@@ -908,7 +908,7 @@ function testBugTwoTallMassReboundsOnce() {
 
     assert(exited, "bug 2 " + mode + " tall mass rebound did not reach its planned exit");
     assert(reboundStarts === 1, "bug 2 " + mode + " tall mass rebounded " + reboundStarts + " times instead of once");
-    assertApprox(tilesFromPixels(g, rebound.exitY - peakY), 32, 0.05, "bug 2 " + mode + " bottom rebound did not rise 32 tiles from the top exit");
+    assertApprox(tilesFromPixels(g, rebound.exitY - peakY), 21, 0.05, "bug 2 " + mode + " bottom rebound did not rise 21 tiles from the top exit");
   }
 }
 
@@ -1109,7 +1109,7 @@ function testDeepStaticMassRewardsBottomDive() {
   const deep = g.shouldRebound(g.playerRect());
 
   assert(deep.targetRiseTiles > mid.targetRiseTiles, "bottom dive in tall static mass did not strengthen rebound");
-  assertApprox(deep.targetRiseTiles, 32, 0.001, "bottom dive did not reach the tuned 5-row target height");
+  assertApprox(deep.targetRiseTiles, 21, 0.001, "bottom dive did not reach the tuned 5-row target height");
 }
 
 function testTallStaticMassReboundsFromExit() {
@@ -1133,10 +1133,10 @@ function testTallStaticMassReboundsFromExit() {
     setPlayer(g, cellX(g, 11), bottomY - g.CONFIG.PLAYER_H, "permeating");
     const bottom = measureCurrentReboundPeakFromExit(g, 900, mode);
 
-    assertApprox(center.rebound.targetRiseTiles, 32, 0.001, "tall mass center " + mode + " did not use capped rebound tuning");
-    assertApprox(bottom.rebound.targetRiseTiles, 32, 0.001, "tall mass bottom " + mode + " did not use capped rebound tuning");
-    assertApprox(center.riseTiles, 32, 0.05, "tall mass center " + mode + " did not rise 32 tiles from the planned exit");
-    assertApprox(bottom.riseTiles, 32, 0.05, "tall mass bottom " + mode + " did not rise 32 tiles from the planned exit");
+    assertApprox(center.rebound.targetRiseTiles, 21, 0.001, "tall mass center " + mode + " did not use capped rebound tuning");
+    assertApprox(bottom.rebound.targetRiseTiles, 21, 0.001, "tall mass bottom " + mode + " did not use capped rebound tuning");
+    assertApprox(center.riseTiles, 21, 0.05, "tall mass center " + mode + " did not rise 21 tiles from the planned exit");
+    assertApprox(bottom.riseTiles, 21, 0.05, "tall mass bottom " + mode + " did not rise 21 tiles from the planned exit");
   }
 }
 
@@ -1270,6 +1270,10 @@ function testVeryHighFallCanPermeateThroughLargeMass() {
   assert(passedThrough, "very high fall did not permeate through a large mass");
 }
 
+function reboundTargetFromDepthLevelForTest(level) {
+  return level <= 0 ? 0 : Math.pow(2, level - 1) + level;
+}
+
 function testPlayerLimitMeasurements() {
   const g = makeGame();
   const centerRebounds = [];
@@ -1278,9 +1282,11 @@ function testPlayerLimitMeasurements() {
   const bottomAssistRebounds = [];
   const minimumFalls = [];
   const chainPeaks = [];
-  const targetCenterRebounds = [1, 2, 4, 8, 16];
-  const targetBottomRebounds = [2, 4, 8, 16, 32];
+  const targetCenterRebounds = [0.5, 1.5, 2.5, 3.5, 4.5].map(reboundTargetFromDepthLevelForTest);
+  const targetBottomRebounds = [1, 2, 3, 4, 5].map(reboundTargetFromDepthLevelForTest);
   const targetMinimumFalls = [2, 4, 5, 5, 5];
+  const overCapRows = [6, 8, 12];
+  const cappedRebound = reboundTargetFromDepthLevelForTest(5);
   const heightTolerance = 0.05;
 
   const normalJump = measureNormalJumpPeak(g);
@@ -1303,6 +1309,18 @@ function testPlayerLimitMeasurements() {
     assertApprox(bottomAssistRebounds[i], targetBottomRebounds[i], heightTolerance, "ctrl+shift bottom rebound target missed for " + (i + 1) + " tile mass");
     assertApprox(minimumFalls[i], targetMinimumFalls[i], heightTolerance, "minimum fall-through target missed for " + (i + 1) + " tile mass");
   }
+
+  for (const rows of overCapRows) {
+    const fixture = buildMeasurementFixture(g, { topRow: 24, leftCol: 10, massRows: rows });
+    setPlayer(g, fixture.x, fixture.bottomY - g.CONFIG.PLAYER_H, "permeating");
+    const rebound = g.shouldRebound(g.playerRect());
+    assert(rebound.fire === true, rows + "-tile mass did not allow capped rebound");
+    assertApprox(rebound.meterLevel, 5, 0.001, rows + "-tile mass exceeded the 5-row rebound depth cap");
+    assertApprox(rebound.targetRiseTiles, cappedRebound, 0.001, rows + "-tile mass exceeded the rebound target cap");
+    assertApprox(measureReboundPeak(g, rows, "bottom", "release"), cappedRebound, heightTolerance, "release bottom rebound cap missed for " + rows + " tile mass");
+    assertApprox(measureReboundPeak(g, rows, "bottom", "ctrl+shift"), cappedRebound, heightTolerance, "ctrl+shift bottom rebound cap missed for " + rows + " tile mass");
+  }
+
   assertApprox(normalJump, 2, heightTolerance, "normal jump target missed");
   assertApprox(terminalFall, 5, heightTolerance, "free fall to max-speed target missed");
   assert(terminalRows === 5, "terminal-speed pass-through target missed; expected 5 rows, got " + terminalRows);
@@ -1639,7 +1657,7 @@ function testDeepDynamicMassRewardsBottomDive() {
     const deep = g.shouldRebound(g.playerRect());
 
     assert(deep.targetRiseTiles > mid.targetRiseTiles, "bottom dive in tall dynamic mass did not strengthen rebound");
-    assertApprox(deep.targetRiseTiles, 32, 0.001, "dynamic bottom dive did not reach the tuned 5-row target height");
+    assertApprox(deep.targetRiseTiles, 21, 0.001, "dynamic bottom dive did not reach the tuned 5-row target height");
   } finally {
     g.LEVELS.length = originalLength;
     g.loadLevel(0);
