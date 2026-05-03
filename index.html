@@ -1413,7 +1413,6 @@
       jumpBufferTimer: 0,
       reboundAirborneTimer: 0,
       reboundSurfaced: false,
-      reboundHorizontalBoostActive: false,
       queuedPermeate: false,
       queuedPermeateSource: null,
       permeateUntilClear: false,
@@ -1443,7 +1442,6 @@
       player.jumpBufferTimer = 0;
       player.reboundAirborneTimer = 0;
       player.reboundSurfaced = false;
-      player.reboundHorizontalBoostActive = false;
       player.queuedPermeate = false;
       player.queuedPermeateSource = null;
       player.permeateUntilClear = false;
@@ -1903,7 +1901,6 @@
       player.flashTimer = CONFIG.STUCK_DURATION;
       player.reboundSurfaced = false;
       player.reboundAirborneTimer = 0;
-      player.reboundHorizontalBoostActive = false;
       player.queuedPermeate = false;
       player.queuedPermeateSource = null;
       player.permeateUntilClear = false;
@@ -1924,7 +1921,6 @@
       player.vy = Math.min(player.vy, -CONFIG.REBOUND_SURFACE_SPEED);
       player.reboundSurfaced = false;
       player.reboundAirborneTimer = CONFIG.REBOUND_STATE_DURATION;
-      player.reboundHorizontalBoostActive = true;
       player.permeateUntilClear = false;
       player.permeateStartFeetY = null;
       player.ceilingPullMode = null;
@@ -1954,7 +1950,7 @@
         player.queuedPermeate = false;
         player.queuedPermeateSource = null;
         player.reboundSurfaced = false;
-        player.reboundHorizontalBoostActive = preserveChainBoost;
+        player.reboundAirborneTimer = preserveChainBoost ? CONFIG.REBOUND_STATE_DURATION : 0;
         player.embeddedDepth = 0;
         player.reboundMeterLevel = 0;
         return;
@@ -1965,7 +1961,6 @@
       }
       player.state = "solid";
       player.reboundSurfaced = false;
-      player.reboundAirborneTimer = 0;
       player.queuedPermeate = false;
       player.queuedPermeateSource = null;
       player.permeateStartFeetY = null;
@@ -2044,7 +2039,7 @@
       player.state = "solid";
       player.won = false;
       player.permeateUntilClear = false;
-      player.reboundHorizontalBoostActive = false;
+      player.reboundAirborneTimer = 0;
       player.queuedPermeate = false;
       player.queuedPermeateSource = null;
       player.permeateStartFeetY = null;
@@ -2111,6 +2106,10 @@
       } else {
         beginRebound(result);
       }
+    }
+
+    function reboundMoveBoostActive() {
+      return player.state === "rebounding" || (player.reboundAirborneTimer > 0 && player.vy < 0);
     }
 
     // === STEP (fixed dt) ===
@@ -2181,8 +2180,8 @@
         player.queuedPermeateSource = null;
       }
 
-      if (player.reboundHorizontalBoostActive && player.state !== "rebounding" && player.vy >= 0) {
-        player.reboundHorizontalBoostActive = false;
+      if (player.reboundAirborneTimer > 0 && player.state !== "rebounding" && player.vy >= 0) {
+        player.reboundAirborneTimer = 0;
       }
 
       if (permeatePressed() && player.permeateUntilClear) {
@@ -2191,7 +2190,7 @@
 
       if (player.state === "solid" && permeatePressed()) {
         player.state = "permeating";
-        player.reboundHorizontalBoostActive = false;
+        player.reboundAirborneTimer = 0;
         player.permeateUntilClear = false;
         player.permeateStartFeetY = player.y + CONFIG.PLAYER_H;
       }
@@ -2256,7 +2255,7 @@
 
       var moveInput = (keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0);
       if (moveInput !== 0) player.facing = moveInput;
-      var reboundMoveBoost = player.state === "rebounding" || player.reboundHorizontalBoostActive;
+      var reboundMoveBoost = reboundMoveBoostActive();
       var moveMultiplier = reboundMoveBoost ? CONFIG.REBOUND_HORIZONTAL_MULTIPLIER : 1;
       var accel = CONFIG.MOVE_ACCEL * moveMultiplier;
       var maxHorizontalSpeed = CONFIG.MAX_RUN_SPEED * moveMultiplier;
@@ -2344,6 +2343,11 @@
         }
       }
 
+      if (player.reboundAirborneTimer > 0 && player.state !== "rebounding" && player.vy >= 0) {
+        player.reboundAirborneTimer = 0;
+        player.vx = clamp(player.vx, -CONFIG.MAX_RUN_SPEED, CONFIG.MAX_RUN_SPEED);
+      }
+
       embedded = overlappingMatter(playerRect()).length > 0;
       var reboundingToExit = player.state === "rebounding" && !player.reboundSurfaced;
       if (player.state === "permeating" || reboundingToExit) {
@@ -2399,7 +2403,7 @@
       if (rectsOverlap(playerRect(), goalRect)) {
         player.state = "won";
         player.won = true;
-        player.reboundHorizontalBoostActive = false;
+        player.reboundAirborneTimer = 0;
         player.embeddedDepth = 0;
         player.reboundMeterLevel = 0;
         spawnRipple(goalRect.x + goalRect.w / 2, goalRect.y + goalRect.h / 2, 1);
@@ -2952,6 +2956,7 @@
       matterMassInfo: matterMassInfo,
       shouldRebound: shouldRebound,
       reboundMeterLevel: reboundMeterLevel,
+      reboundMoveBoostActive: reboundMoveBoostActive,
       moveAndCollide: moveAndCollide,
       probeGrounded: probeGrounded,
       placePlayerAtCell: placePlayerAtCell,

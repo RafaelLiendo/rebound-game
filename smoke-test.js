@@ -101,7 +101,6 @@ function setPlayer(g, x, y, state = "solid") {
   p.jumpBufferTimer = 0;
   p.reboundAirborneTimer = 0;
   p.reboundSurfaced = false;
-  p.reboundHorizontalBoostActive = false;
   p.queuedPermeate = false;
   p.queuedPermeateSource = null;
   p.permeateUntilClear = false;
@@ -1018,11 +1017,11 @@ function testReboundHorizontalBoostScalesMovement() {
     step(g);
     assert(g.player.state !== "stuck", "rebound horizontal boost entered stuck recovery");
     assert(Math.abs(g.player.vx) <= boostedSpeed + eps, "rebound horizontal boost exceeded its boosted speed cap");
-    if (g.player.reboundHorizontalBoostActive && Math.abs(g.player.vx) > normalSpeed + eps) exceededNormal = true;
-    if (g.player.state === "solid" && g.player.reboundHorizontalBoostActive && g.player.vy < 0) {
+    if (g.reboundMoveBoostActive() && Math.abs(g.player.vx) > normalSpeed + eps) exceededNormal = true;
+    if (g.player.state === "solid" && g.reboundMoveBoostActive() && g.player.vy < 0) {
       sawSolidLaunchBoost = true;
     }
-    if (sawSolidLaunchBoost && !g.player.reboundHorizontalBoostActive) {
+    if (sawSolidLaunchBoost && !g.reboundMoveBoostActive()) {
       boostEnded = true;
       break;
     }
@@ -1065,10 +1064,10 @@ function testCtrlChainReboundsKeepHorizontalBoost() {
     assert(Math.abs(g.player.vx) <= boostedSpeed + eps, "Ctrl chain horizontal boost exceeded its doubled speed cap");
 
     if (previousState !== "rebounding" && g.player.state === "rebounding") reboundStarts++;
-    if (reboundStarts >= 2 && g.player.reboundHorizontalBoostActive && Math.abs(g.player.vx) > normalSpeed + eps) {
+    if (reboundStarts >= 2 && g.reboundMoveBoostActive() && Math.abs(g.player.vx) > normalSpeed + eps) {
       secondReboundExceededNormal = true;
     }
-    if (reboundStarts >= 2 && g.player.state !== "rebounding" && g.player.reboundHorizontalBoostActive && g.player.vy < 0) {
+    if (reboundStarts >= 2 && g.player.state !== "rebounding" && g.reboundMoveBoostActive() && g.player.vy < 0) {
       secondReboundReachedChainLaunch = true;
       break;
     }
