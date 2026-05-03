@@ -1657,22 +1657,8 @@
 
     function reboundDepthLevel(depthPixels, massPixels) {
       if (depthPixels <= 0 || massPixels <= 0) return 0;
-      var cappedRows = Math.max(1, Math.min(
-        Math.ceil(massPixels / TS),
-        CONFIG.REBOUND_TUNED_MAX_ROWS
-      ));
-      var tunedMassPixels = cappedRows * TS;
-      var tunedDepthPixels = clamp(depthPixels, 0, tunedMassPixels);
-      var centerDepth = tunedMassPixels / 2;
-      var centerLevel = cappedRows - 0.5;
-      if (tunedDepthPixels <= centerDepth) {
-        return clamp(centerLevel * tunedDepthPixels / Math.max(1, centerDepth), 0, CONFIG.REBOUND_TUNED_MAX_ROWS);
-      }
-      return clamp(centerLevel + 0.5 *
-        (tunedDepthPixels - centerDepth) / Math.max(1, tunedMassPixels - centerDepth),
-        0,
-        CONFIG.REBOUND_TUNED_MAX_ROWS
-      );
+      var maxDepthLevel = Math.min(massPixels / TS, CONFIG.REBOUND_TUNED_MAX_ROWS);
+      return clamp(depthPixels / TS, 0, maxDepthLevel);
     }
 
     function reboundTargetRiseTiles(depthPixels, massPixels) {

@@ -80,12 +80,13 @@ There is no build step. `index.html` can be opened directly in a browser.
   prefer fixing unreachable gaps in the map over loosening the audit.
 - If level switching changes, keep `window.gameInternals` useful for tests by
   exposing live getters for active level data, dimensions, and camera position.
-- Rebound tuning is intentionally target-based. `reboundDepthLevel()` maps
-  lower-body depth and capped mass height to a `0.0` to `5.0` depth scale, and
-  `reboundTargetRiseTiles()` converts that depth level into target height with
-  `2^(n - 1) + n`. The launch-speed helper then converts that target into
-  fixed-step motion. Prefer extending this model over adding separate deep-bonus
-  formulas.
+- Rebound tuning is intentionally target-based. `reboundDepthLevel()` is the
+  lower-body embedded depth in tile rows, clamped by the active mass height and
+  the five-row tuning cap, so the center of a five-row mass is `2.5` and the
+  bottom is `5.0`. `reboundTargetRiseTiles()` converts that depth level into
+  target height with `2^(n - 1) + n`. The launch-speed helper then converts that
+  target into fixed-step motion. Prefer extending this model over adding
+  separate deep-bonus formulas.
 - Rebound targets are measured from the planned top exit, `reboundExitY`, not
   from the release depth. While rebounding, the player phases upward until the
   planned exit, then receives the launch velocity for the full target rise.
