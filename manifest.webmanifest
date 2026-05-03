@@ -1,0 +1,19 @@
+{
+  "name": "Rebound Game",
+  "short_name": "Rebound",
+  "description": "A landscape mobile canvas platformer about permeation and rebound.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#060814",
+  "theme_color": "#060814",
+  "icons": [
+    {
+      "src": "shadow-cat.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

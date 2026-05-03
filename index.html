@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Rebound">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="shadow-cat.png">
   <title>Permeation Buoyancy Demo</title>
   <style>
     :root {
@@ -47,26 +50,6 @@
       aspect-ratio: 16 / 9;
       min-height: 280px;
       max-height: calc(100vh - 36px);
-    }
-
-    .shell:fullscreen,
-    .shell:-webkit-full-screen {
-      display: grid;
-      width: 100vw;
-      height: 100vh;
-      height: 100dvh;
-      max-height: none;
-      min-height: 0;
-      place-items: center;
-      background: #060814;
-    }
-
-    .shell:fullscreen canvas,
-    .shell:-webkit-full-screen canvas {
-      width: min(100vw, calc(100vh * 16 / 9));
-      height: min(100vh, calc(100vw * 9 / 16));
-      border: 0;
-      border-radius: 0;
     }
 
     canvas {
@@ -314,19 +297,24 @@
       text-transform: uppercase;
     }
 
-    .fullscreenButton {
-      appearance: none;
-      top: max(14px, calc(env(safe-area-inset-top) + 10px));
+    .installHint {
+      position: absolute;
       left: 50%;
-      width: clamp(52px, 10vmin, 68px);
-      height: clamp(52px, 10vmin, 68px);
-      color: rgba(246, 243, 255, 0.86);
-      font-family: inherit;
-      font-size: clamp(11px, 2.2vmin, 13px);
-      font-weight: 900;
-      letter-spacing: 0;
-      text-transform: uppercase;
+      bottom: max(24px, calc(env(safe-area-inset-bottom) + 18px));
+      display: none;
+      width: min(42vw, 310px);
+      padding: 7px 10px;
+      border: 1px solid rgba(155, 221, 255, 0.36);
+      border-radius: 8px;
+      background: rgba(8, 10, 28, 0.64);
+      color: var(--ink);
+      font-size: clamp(10px, 2vmin, 12px);
+      font-weight: 750;
+      line-height: 1.2;
+      text-align: center;
       transform: translateX(-50%);
+      pointer-events: none;
+      backdrop-filter: blur(10px);
     }
 
     .touchKnob {
@@ -387,6 +375,15 @@
     }
 
     @media (orientation: landscape) {
+      .mobileMode body {
+        padding: 0;
+      }
+
+      .mobileMode .shell {
+        width: min(100vw, calc(100dvh * 16 / 9));
+        max-height: 100dvh;
+      }
+
       .mobileMode .mobileControls {
         display: block;
       }
@@ -547,6 +544,14 @@
       .mobileMode .control-hint {
         font-size: 9px;
       }
+
+      .mobileMode.iosBrowser .installHint {
+        display: block;
+      }
+
+      .mobileMode.standaloneMode .installHint {
+        display: none;
+      }
     }
   </style>
 </head>
@@ -635,7 +640,7 @@
       <div id="mobileShift" class="touchControl mobileShift" role="button" aria-label="Hold; drag up to chain rebound">
         <span id="mobileShiftKnob" class="touchKnob">Hold</span>
       </div>
-      <button id="fullscreenButton" class="touchControl fullscreenButton" type="button" aria-label="Play fullscreen">Full</button>
+      <div id="installHint" class="installHint" aria-live="polite">iPhone: Share > Add to Home Screen for full screen.</div>
     </div>
     <div class="rotatePrompt" aria-hidden="true">Rotate to landscape</div>
   </main>
@@ -685,7 +690,6 @@
     var messageLabel = document.getElementById("messageLabel");
     var pressureMeter = document.getElementById("pressureMeter");
     var pressureFill = document.getElementById("pressureFill");
-    var fullscreenButton = document.getElementById("fullscreenButton");
     var particles = [];
     var ripples = [];
     var shake = 0;
@@ -694,6 +698,21 @@
       return !!(
         (typeof navigator !== "undefined" && navigator.maxTouchPoints > 0) ||
         ("ontouchstart" in window)
+      );
+    }
+
+    function detectIOS() {
+      if (typeof navigator === "undefined") return false;
+      var ua = navigator.userAgent || "";
+      var platform = navigator.platform || "";
+      return /iPad|iPhone|iPod/.test(ua) ||
+        (platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    }
+
+    function isStandaloneWebApp() {
+      return !!(
+        (typeof navigator !== "undefined" && navigator.standalone) ||
+        (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
       );
     }
 
@@ -716,6 +735,16 @@
         root.classList.add("mobileMode");
       } else {
         root.classList.remove("mobileMode");
+      }
+      if (detectIOS() && !isStandaloneWebApp()) {
+        root.classList.add("iosBrowser");
+      } else {
+        root.classList.remove("iosBrowser");
+      }
+      if (isStandaloneWebApp()) {
+        root.classList.add("standaloneMode");
+      } else {
+        root.classList.remove("standaloneMode");
       }
     }
 
@@ -1658,42 +1687,6 @@
     canvas.addEventListener("pointerup", function (ev) {
       if (activateCompletionPrompt()) ev.preventDefault();
     });
-
-    function fullscreenElement() {
-      return document.fullscreenElement || document.webkitFullscreenElement || null;
-    }
-
-    function requestGameFullscreen() {
-      var target = shell || canvas;
-      if (!target) return false;
-      if (fullscreenElement()) return true;
-      if (target.requestFullscreen) {
-        target.requestFullscreen();
-        return true;
-      }
-      if (target.webkitRequestFullscreen) {
-        target.webkitRequestFullscreen();
-        return true;
-      }
-      return false;
-    }
-
-    function updateFullscreenButton() {
-      if (!fullscreenButton) return;
-      fullscreenButton.textContent = fullscreenElement() ? "Full" : "Full";
-      fullscreenButton.setAttribute("aria-label", fullscreenElement() ? "Fullscreen active" : "Play fullscreen");
-    }
-
-    if (fullscreenButton && fullscreenButton.addEventListener) {
-      fullscreenButton.addEventListener("pointerup", function (ev) {
-        ev.preventDefault();
-        requestGameFullscreen();
-        updateFullscreenButton();
-      });
-    }
-    document.addEventListener("fullscreenchange", updateFullscreenButton);
-    document.addEventListener("webkitfullscreenchange", updateFullscreenButton);
-    updateFullscreenButton();
 
     function installMobileControls() {
       var joystick = document.getElementById("mobileJoystick");
@@ -3605,8 +3598,9 @@
       loadLevel: loadLevel,
       nextLevel: nextLevel,
       activateCompletionPrompt: activateCompletionPrompt,
-      requestGameFullscreen: requestGameFullscreen,
       detectTouchMode: detectTouchMode,
+      detectIOS: detectIOS,
+      isStandaloneWebApp: isStandaloneWebApp,
       detectCompactMobileViewport: detectCompactMobileViewport,
       isFinalLevel: isFinalLevel,
       updateCamera: updateCamera,

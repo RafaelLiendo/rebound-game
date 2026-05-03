@@ -1,6 +1,7 @@
 const fs = require("fs");
 
 const html = fs.readFileSync("index.html", "utf8");
+const manifest = JSON.parse(fs.readFileSync("manifest.webmanifest", "utf8"));
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 
 function makeGame() {
@@ -24,6 +25,13 @@ function makeGame() {
       },
       addEventListener() {},
       setPointerCapture() {},
+      requestFullscreen() {
+        global.document.fullscreenElement = this;
+        return Promise.resolve();
+      },
+      webkitRequestFullscreen() {
+        global.document.webkitFullscreenElement = this;
+      },
       getBoundingClientRect() {
         return { width: 96, height: 96, left: 0, top: 0, right: 96, bottom: 96 };
       },
@@ -49,10 +57,15 @@ function makeGame() {
   }
   const documentElement = makeElement();
   global.window = { addEventListener() {}, innerWidth: 960, innerHeight: 540, gameInternals: null };
+  Object.defineProperty(global, "navigator", {
+    configurable: true,
+    value: { maxTouchPoints: 0, standalone: false, userAgent: "Smoke", platform: "Win32" }
+  });
   global.document = {
     documentElement,
     fullscreenElement: null,
     webkitFullscreenElement: null,
+    fullscreenEnabled: true,
     addEventListener() {},
     querySelector(selector) {
       if (selector === ".shell") return makeElement();
@@ -185,11 +198,35 @@ function testMobileHudCopyExplainsTouchControls() {
   assert(html.includes('id="mobileShiftKnob" class="touchKnob">Hold</span>'), "mobile Shift button does not say Hold");
   assert(html.includes('content: "^"'), "mobile Shift button does not show an upward drag cue");
   assert(html.includes("mobileMode"), "mobile HUD does not have the robust mobile-mode fallback");
-  assert(html.includes("fullscreenButton"), "mobile fullscreen button is missing");
+  assert(html.includes("installHint"), "mobile install hint is missing");
+  assert(html.includes("iPhone: Share > Add to Home Screen for full screen."), "iPhone install hint copy is missing");
+  assert(!html.includes("fullscreenButton"), "experimental fullscreen button should be removed");
+  assert(!html.includes("requestGameFullscreen"), "experimental fullscreen API path should be removed");
   assert(html.includes("viewport-fit=cover"), "mobile viewport does not opt into safe-area fullscreen layout");
   assert(html.includes("Tap to continue"), "completion prompt does not use tap-to-continue copy");
   assert(html.includes("Tap to checkpoint"), "final completion prompt does not use tap-to-checkpoint copy");
   assert(!html.includes("Press Space for next rift"), "win prompt still asks mobile players to press Space");
+}
+
+function testPwaManifestIsLinkedAndLandscapeFullscreen() {
+  assert(html.includes('<link rel="manifest" href="manifest.webmanifest">'), "manifest link is missing");
+  assert(html.includes('<link rel="apple-touch-icon" href="shadow-cat.png">'), "Apple touch icon link is missing");
+  assert(manifest.display === "fullscreen", "manifest display is not fullscreen");
+  assert(manifest.orientation === "landscape", "manifest orientation is not landscape");
+  assert(manifest.icons.some((icon) => icon.src === "shadow-cat.png"), "manifest does not use shadow-cat icon");
+}
+
+function testIOSStandaloneDetectionForInstallHint() {
+  const g = makeGame();
+
+  global.navigator.userAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)";
+  global.navigator.platform = "iPhone";
+  global.navigator.maxTouchPoints = 5;
+  assert(g.detectIOS() === true, "iPhone user agent was not detected");
+  assert(g.isStandaloneWebApp() === false, "normal iPhone Safari was detected as standalone");
+
+  global.navigator.standalone = true;
+  assert(g.isStandaloneWebApp() === true, "home-screen web app was not detected as standalone");
 }
 
 function testCompactViewportEnablesMobileMode() {
@@ -2802,6 +2839,8 @@ const tests = [
   ["mobile Shift button maps Shift and vertical assist", testMobileShiftButtonMapsShiftAndVerticalAssist],
   ["mobile Shift release at top releases Shift and Ctrl", testMobileShiftReleaseAtTopReleasesShiftAndCtrl],
   ["mobile HUD copy explains touch controls", testMobileHudCopyExplainsTouchControls],
+  ["PWA manifest is linked and landscape fullscreen", testPwaManifestIsLinkedAndLandscapeFullscreen],
+  ["iOS standalone detection for install hint", testIOSStandaloneDetectionForInstallHint],
   ["compact viewport enables mobile mode", testCompactViewportEnablesMobileMode],
   ["tap completion prompt advances level", testTapCompletionPromptAdvancesLevel],
   ["tap final completion prompt restarts checkpoint", testTapFinalCompletionPromptRestartsCheckpoint],

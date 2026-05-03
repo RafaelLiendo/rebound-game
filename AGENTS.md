@@ -20,6 +20,8 @@ Supporting notes:
 - `Lore.md` describes the larger Shadow Cats / Open Claw fantasy. Treat it as
   useful direction for theme, naming, and future expansion.
 - `smoke-test.js` is the lightweight Node-based regression suite.
+- `manifest.webmanifest` provides the mobile install/PWA metadata for
+  home-screen fullscreen-style launch.
 
 ## Commands
 
@@ -88,6 +90,20 @@ There is no build step. `index.html` can be opened directly in a browser.
   directly.
 - If level switching changes, keep `window.gameInternals` useful for tests by
   exposing live getters for active level data, dimensions, and camera position.
+- Mobile landscape play uses touch controls layered over the canvas:
+  - the left joystick maps to left/right movement, with upward drag mapped to
+    Space jump;
+  - the right button is labeled `Hold`, maps to Shift while pressed, and shows
+    a `^` cue because upward drag maps to Ctrl+Shift assisted chaining;
+  - mobile control help in the HUD should describe the touch controls, not
+    desktop keyboard controls.
+- Do not add a fake fullscreen button for iPhone Safari. Prefer the PWA path:
+  keep `manifest.webmanifest`, mobile web app meta tags, and the iPhone
+  `Share > Add to Home Screen` hint. The hint should show only for iOS browser
+  mobile mode and hide in standalone/home-screen mode.
+- Mobile landscape layout should fill the available viewport cleanly, using
+  safe-area-aware positioning for controls and HUD. Portrait should keep the
+  rotate prompt.
 - Rebound tuning is intentionally target-based. `reboundDepthLevel()` is the
   lower-body embedded depth in tile rows, clamped by the active mass height and
   the five-row tuning cap, so the center of a five-row mass is `2.5` and the
@@ -200,6 +216,8 @@ Add smoke coverage when changing:
   pass-through thickness
 - HUD meter behavior or visual charge scaling, including rebound-depth meter
   levels, five visible segments, ARIA value text, and full/empty fill states
+- mobile controls, HUD copy, touch mappings, iOS install hints, PWA manifest
+  metadata, or mobile viewport behavior
 - level loading or goal completion
 - authored level reachability, especially terrain gaps, rebound mass heights,
   moving platform surfaces, player clearance, and goal shelf access
