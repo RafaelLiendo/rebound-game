@@ -103,6 +103,8 @@ function setPlayer(g, x, y, state = "solid") {
   p.reboundSurfaced = false;
   p.queuedPermeate = false;
   p.queuedPermeateSource = null;
+  p.manualReboundQueued = false;
+  p.manualChainTimer = 0;
   p.permeateUntilClear = false;
   p.permeateStartFeetY = state === "permeating" ? y + g.CONFIG.PLAYER_H : null;
   p.ceilingPullMode = null;
@@ -1050,6 +1052,50 @@ function testManualTapChainKeepsQueuedPermeation() {
   }
 
   throw new Error("manual tap chain did not reach the top goal");
+}
+
+function testManualRhythmChainCompletesFirstLevelWithoutCtrl() {
+  const g = makeGame();
+  g.loadLevel(0);
+  setPlayer(g, cellX(g, 7), standY(g, 60), "solid");
+
+  press(g, "ShiftLeft");
+  step(g, 60);
+  assert(g.overlappingSolidTiles(g.playerRect()).length > 0, "manual rhythm chain never entered the first mass");
+  release(g, "ShiftLeft");
+  step(g);
+  assert(g.player.state === "rebounding", "manual rhythm chain did not start the first rebound");
+
+  const tapPeriod = 8;
+  const tapWidth = 2;
+  let reboundStarts = 1;
+  let previousState = g.player.state;
+  let chainStarted = true;
+
+  for (let i = 0; i < 2400; i++) {
+    const phase = i % tapPeriod;
+    if (phase === 0) press(g, "ShiftLeft");
+    if (phase === tapWidth) release(g, "ShiftLeft");
+
+    assert(g.keys.ControlLeft !== true && g.keys.ControlRight !== true, "manual rhythm chain used Ctrl");
+    step(g);
+
+    if (previousState !== "rebounding" && g.player.state === "rebounding") reboundStarts++;
+    previousState = g.player.state;
+    if (g.player.state === "permeating" || g.player.state === "rebounding") chainStarted = true;
+
+    assert(g.keys.ControlLeft !== true && g.keys.ControlRight !== true, "manual rhythm chain held Ctrl after stepping");
+    assert(g.player.state !== "stuck", "manual rhythm chain entered stuck recovery");
+    assert(!chainStarted || g.player.state !== "solid", "manual rhythm chain became solid before reaching the top");
+    assert(g.player.stuckTimer === 0, "manual rhythm chain armed stuck respawn");
+
+    if (g.player.won) {
+      assert(reboundStarts >= 4, "manual rhythm chain did not perform enough rebounds");
+      return;
+    }
+  }
+
+  throw new Error("manual rhythm chain did not reach the first-level goal without Ctrl");
 }
 
 function testReboundHorizontalBoostScalesMovement() {
@@ -2026,6 +2072,7 @@ const tests = [
   ["auto assist climbs tuned thick stack", testAutoAssistClimbsTunedThickStack],
   ["manual queue consumes on surface", testManualQueueConsumesOnSurface],
   ["manual tap chain keeps queued permeation", testManualTapChainKeepsQueuedPermeation],
+  ["manual rhythm chain completes first level without Ctrl", testManualRhythmChainCompletesFirstLevelWithoutCtrl],
   ["rebound horizontal boost scales movement", testReboundHorizontalBoostScalesMovement],
   ["Ctrl chain rebounds keep horizontal boost", testCtrlChainReboundsKeepHorizontalBoost],
   ["upper-body-only release waits until clear", testUpperBodyOnlyReleaseDoesNotRebound],
