@@ -26,7 +26,9 @@ state flow, controls, and behavior validation.
   of simply falling at normal speed.
 - Rebound should build from the player's embedded depth. The player should begin
   the rebound calmly, accelerate while still inside the solid mass, then surface
-  with enough upward momentum to reach otherwise inaccessible spaces.
+  with enough upward momentum to reach otherwise inaccessible spaces. During the
+  upward rebound launch, horizontal steering should be stronger than normal
+  movement so the player can shape the arc.
 - A shallow release with the lower body embedded should produce a smaller pop.
   A deeper release should produce a stronger launch.
 - Releasing while only the upper body is still inside solid matter should not

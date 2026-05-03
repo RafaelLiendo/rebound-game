@@ -360,7 +360,7 @@
       JUMP_CUT_VELOCITY: -2.8,
       COYOTE_FRAMES: 6,
       JUMP_BUFFER_FRAMES: 6,
-      REBOUND_AIR_CONTROL: 0.5,
+      REBOUND_HORIZONTAL_MULTIPLIER: 2,
       REBOUND_STATE_DURATION: 0.4,
       REBOUND_SURFACE_SPEED: 16,
       REBOUND_MAX_CHARGE: 2.4,
@@ -1413,6 +1413,7 @@
       jumpBufferTimer: 0,
       reboundAirborneTimer: 0,
       reboundSurfaced: false,
+      reboundHorizontalBoostActive: false,
       queuedPermeate: false,
       queuedPermeateSource: null,
       permeateUntilClear: false,
@@ -1442,6 +1443,7 @@
       player.jumpBufferTimer = 0;
       player.reboundAirborneTimer = 0;
       player.reboundSurfaced = false;
+      player.reboundHorizontalBoostActive = false;
       player.queuedPermeate = false;
       player.queuedPermeateSource = null;
       player.permeateUntilClear = false;
@@ -1901,6 +1903,7 @@
       player.flashTimer = CONFIG.STUCK_DURATION;
       player.reboundSurfaced = false;
       player.reboundAirborneTimer = 0;
+      player.reboundHorizontalBoostActive = false;
       player.queuedPermeate = false;
       player.queuedPermeateSource = null;
       player.permeateUntilClear = false;
@@ -1921,6 +1924,7 @@
       player.vy = Math.min(player.vy, -CONFIG.REBOUND_SURFACE_SPEED);
       player.reboundSurfaced = false;
       player.reboundAirborneTimer = CONFIG.REBOUND_STATE_DURATION;
+      player.reboundHorizontalBoostActive = true;
       player.permeateUntilClear = false;
       player.permeateStartFeetY = null;
       player.ceilingPullMode = null;
@@ -1949,6 +1953,7 @@
         player.queuedPermeate = false;
         player.queuedPermeateSource = null;
         player.reboundSurfaced = false;
+        player.reboundHorizontalBoostActive = false;
         player.embeddedDepth = 0;
         player.reboundMeterLevel = 0;
         return;
@@ -2038,6 +2043,7 @@
       player.state = "solid";
       player.won = false;
       player.permeateUntilClear = false;
+      player.reboundHorizontalBoostActive = false;
       player.queuedPermeate = false;
       player.queuedPermeateSource = null;
       player.permeateStartFeetY = null;
@@ -2174,12 +2180,17 @@
         player.queuedPermeateSource = null;
       }
 
+      if (player.reboundHorizontalBoostActive && player.state !== "rebounding" && player.vy >= 0) {
+        player.reboundHorizontalBoostActive = false;
+      }
+
       if (permeatePressed() && player.permeateUntilClear) {
         player.permeateUntilClear = false;
       }
 
       if (player.state === "solid" && permeatePressed()) {
         player.state = "permeating";
+        player.reboundHorizontalBoostActive = false;
         player.permeateUntilClear = false;
         player.permeateStartFeetY = player.y + CONFIG.PLAYER_H;
       }
@@ -2244,12 +2255,16 @@
 
       var moveInput = (keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0);
       if (moveInput !== 0) player.facing = moveInput;
-      var accel = CONFIG.MOVE_ACCEL * (player.state === "rebounding" ? CONFIG.REBOUND_AIR_CONTROL : 1);
+      var reboundMoveBoost = player.state === "rebounding" || player.reboundHorizontalBoostActive;
+      var moveMultiplier = reboundMoveBoost ? CONFIG.REBOUND_HORIZONTAL_MULTIPLIER : 1;
+      var accel = CONFIG.MOVE_ACCEL * moveMultiplier;
+      var maxHorizontalSpeed = CONFIG.MAX_RUN_SPEED * moveMultiplier;
       if (moveInput !== 0) {
         player.vx += moveInput * accel;
-        if (player.state !== "rebounding") player.vx = clamp(player.vx, -CONFIG.MAX_RUN_SPEED, CONFIG.MAX_RUN_SPEED);
+        player.vx = clamp(player.vx, -maxHorizontalSpeed, maxHorizontalSpeed);
       } else {
         player.vx = approach(player.vx, 0, CONFIG.MOVE_DECEL);
+        if (!reboundMoveBoost) player.vx = clamp(player.vx, -CONFIG.MAX_RUN_SPEED, CONFIG.MAX_RUN_SPEED);
       }
 
       var canJump = (player.state === "solid" || (player.state === "rebounding" && player.reboundSurfaced)) &&
@@ -2383,6 +2398,7 @@
       if (rectsOverlap(playerRect(), goalRect)) {
         player.state = "won";
         player.won = true;
+        player.reboundHorizontalBoostActive = false;
         player.embeddedDepth = 0;
         player.reboundMeterLevel = 0;
         spawnRipple(goalRect.x + goalRect.w / 2, goalRect.y + goalRect.h / 2, 1);

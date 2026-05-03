@@ -101,6 +101,7 @@ function setPlayer(g, x, y, state = "solid") {
   p.jumpBufferTimer = 0;
   p.reboundAirborneTimer = 0;
   p.reboundSurfaced = false;
+  p.reboundHorizontalBoostActive = false;
   p.queuedPermeate = false;
   p.queuedPermeateSource = null;
   p.permeateUntilClear = false;
@@ -589,8 +590,8 @@ function fallFramesToDrop(g, fallTiles) {
   return 600;
 }
 
-function horizontalReachTilesForFrames(g, frames) {
-  return frames * g.CONFIG.MAX_RUN_SPEED / g.CONFIG.TILE_SIZE + g.CONFIG.PLAYER_W / g.CONFIG.TILE_SIZE;
+function horizontalReachTilesForFrames(g, frames, speedMultiplier = 1) {
+  return frames * g.CONFIG.MAX_RUN_SPEED * speedMultiplier / g.CONFIG.TILE_SIZE + g.CONFIG.PLAYER_W / g.CONFIG.TILE_SIZE;
 }
 
 function movementAnalysis(g, from, to) {
@@ -626,7 +627,8 @@ function movementAnalysis(g, from, to) {
     }
     horizontalLimitTiles = horizontalReachTilesForFrames(
       g,
-      ascentFramesAtRise(g, launchSpeedForRiseTilesForTest(g, verticalLimitTiles), riseTiles)
+      ascentFramesAtRise(g, launchSpeedForRiseTilesForTest(g, verticalLimitTiles), riseTiles),
+      g.CONFIG.REBOUND_HORIZONTAL_MULTIPLIER
     );
   }
 
@@ -995,6 +997,41 @@ function testManualQueueConsumesOnSurface() {
   }
 
   assert(surfaced, "player never surfaced during rebound");
+}
+
+function testReboundHorizontalBoostDoublesMovement() {
+  const g = makeGame();
+  const fixture = buildMeasurementFixture(g, { topRow: 24, leftCol: 10, massRows: 5, cols: 3 });
+  const normalSpeed = g.CONFIG.MAX_RUN_SPEED;
+  const boostedSpeed = normalSpeed * g.CONFIG.REBOUND_HORIZONTAL_MULTIPLIER;
+  const eps = 0.001;
+
+  setPlayer(g, fixture.x, fixture.bottomY - g.CONFIG.PLAYER_H, "permeating");
+  release(g, "ShiftLeft");
+  press(g, "ArrowRight");
+
+  let exceededNormal = false;
+  let sawSolidLaunchBoost = false;
+  let boostEnded = false;
+
+  for (let i = 0; i < 240; i++) {
+    step(g);
+    assert(g.player.state !== "stuck", "rebound horizontal boost entered stuck recovery");
+    assert(Math.abs(g.player.vx) <= boostedSpeed + eps, "rebound horizontal boost exceeded its doubled speed cap");
+    if (g.player.reboundHorizontalBoostActive && Math.abs(g.player.vx) > normalSpeed + eps) exceededNormal = true;
+    if (g.player.state === "solid" && g.player.reboundHorizontalBoostActive && g.player.vy < 0) {
+      sawSolidLaunchBoost = true;
+    }
+    if (sawSolidLaunchBoost && !g.player.reboundHorizontalBoostActive) {
+      boostEnded = true;
+      break;
+    }
+  }
+
+  assert(exceededNormal, "rebound horizontal boost never exceeded normal run speed");
+  assert(sawSolidLaunchBoost, "rebound horizontal boost did not persist into the visible upward launch");
+  assert(boostEnded, "rebound horizontal boost did not end after the upward launch apex");
+  assert(Math.abs(g.player.vx) <= normalSpeed + eps, "normal movement stayed above max run speed after rebound boost ended");
 }
 
 function testUpperBodyOnlyReleaseDoesNotRebound() {
@@ -1821,6 +1858,7 @@ const tests = [
   ["bug 2 tall mass rebounds once", testBugTwoTallMassReboundsOnce],
   ["auto assist climbs tuned thick stack", testAutoAssistClimbsTunedThickStack],
   ["manual queue consumes on surface", testManualQueueConsumesOnSurface],
+  ["rebound horizontal boost doubles movement", testReboundHorizontalBoostDoublesMovement],
   ["upper-body-only release waits until clear", testUpperBodyOnlyReleaseDoesNotRebound],
   ["ceiling hang without input stays pinned", testCeilingHangWithoutInputStaysPinned],
   ["ceiling hang Space latches center pull", testCeilingHangSpaceLatchesCenterPull],
