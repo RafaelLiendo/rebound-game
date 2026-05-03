@@ -710,20 +710,21 @@ function addStaticSurfaceNodes(level, nodes) {
   for (let r = 0; r < level.map.length; r++) {
     let c = 0;
     while (c < level.map[0].length) {
-      if (!isSolidTile(level, r, c) || isSolidTile(level, r - 1, c) || !hasPlayerClearance(level, r, c)) {
+      if (!isSolidTile(level, r, c) || isSolidTile(level, r - 1, c)) {
         c++;
         continue;
       }
 
       const start = c;
       let maxHeight = 0;
+      let standable = false;
       while (
         c < level.map[0].length &&
         isSolidTile(level, r, c) &&
-        !isSolidTile(level, r - 1, c) &&
-        hasPlayerClearance(level, r, c)
+        !isSolidTile(level, r - 1, c)
       ) {
         maxHeight = Math.max(maxHeight, staticColumnHeight(level, r, c));
+        standable = standable || hasPlayerClearance(level, r, c);
         c++;
       }
 
@@ -734,7 +735,12 @@ function addStaticSurfaceNodes(level, nodes) {
         w: c - start,
         h: maxHeight,
         type: "terrain",
-        name: "terrain"
+        name: "terrain",
+        standable,
+        minC: start,
+        maxC: c,
+        minR: r,
+        maxR: r + 1
       });
     }
   }
@@ -744,6 +750,8 @@ function addMoverSurfaceNodes(level, nodes) {
   let id = nodes.length;
   for (const entity of level.entities) {
     if (entity.type !== "mover") continue;
+    const ampXTiles = Math.abs(entity.ampX || 0) / 32;
+    const ampYTiles = Math.abs(entity.ampY || 0) / 32;
     nodes.push({
       id: id++,
       c: entity.c,
@@ -752,7 +760,12 @@ function addMoverSurfaceNodes(level, nodes) {
       h: entity.h,
       type: entity.type,
       name: entity.name,
-      role: entity.role
+      role: entity.role,
+      standable: true,
+      minC: entity.c - ampXTiles,
+      maxC: entity.c + entity.w + ampXTiles,
+      minR: entity.r - ampYTiles,
+      maxR: entity.r + 1 + ampYTiles
     });
   }
 }
@@ -765,8 +778,12 @@ function surfaceNodesForLevel(level) {
 }
 
 function rangeGapTiles(a, b) {
-  if (a.c + a.w <= b.c) return b.c - (a.c + a.w);
-  if (b.c + b.w <= a.c) return a.c - (b.c + b.w);
+  const aMin = a.minC === undefined ? a.c : a.minC;
+  const aMax = a.maxC === undefined ? a.c + a.w : a.maxC;
+  const bMin = b.minC === undefined ? b.c : b.minC;
+  const bMax = b.maxC === undefined ? b.c + b.w : b.maxC;
+  if (aMax <= bMin) return bMin - aMax;
+  if (bMax <= aMin) return aMin - bMax;
   return 0;
 }
 
@@ -831,6 +848,22 @@ function horizontalReachTilesForFrames(g, frames, speedMultiplier = 1) {
   return frames * g.CONFIG.MAX_RUN_SPEED * speedMultiplier / g.CONFIG.TILE_SIZE + g.CONFIG.PLAYER_W / g.CONFIG.TILE_SIZE;
 }
 
+function slabChainAnalysis(g, from, to, riseTiles, gapTiles) {
+  const horizontallyAligned = gapTiles <= 1;
+  const shallowMatter = from.h <= 2 && to.h <= 2;
+  const emptyRows = riseTiles - 1;
+  if (!horizontallyAligned || !shallowMatter || emptyRows < 1 || emptyRows > 2) return null;
+  return {
+    ok: true,
+    mode: "chain",
+    riseTiles,
+    gapTiles,
+    verticalLimitTiles: 3,
+    horizontalLimitTiles: 1,
+    reason: "chain"
+  };
+}
+
 function movementAnalysis(g, from, to) {
   const riseTiles = from.r - to.r;
   const gapTiles = rangeGapTiles(from, to);
@@ -840,7 +873,7 @@ function movementAnalysis(g, from, to) {
 
   if (riseTiles <= 0) {
     horizontalLimitTiles = horizontalReachTilesForFrames(g, fallFramesToDrop(g, -riseTiles));
-  } else if (riseTiles <= LEVEL_REACH_LIMITS.normalJumpTiles) {
+  } else if (riseTiles <= LEVEL_REACH_LIMITS.normalJumpTiles && to.standable) {
     mode = "jump";
     verticalLimitTiles = LEVEL_REACH_LIMITS.normalJumpTiles;
     horizontalLimitTiles = horizontalReachTilesForFrames(
@@ -848,6 +881,9 @@ function movementAnalysis(g, from, to) {
       ascentFramesAtRise(g, launchSpeedForRiseTilesForTest(g, LEVEL_REACH_LIMITS.normalJumpTiles), riseTiles)
     );
   } else {
+    const chain = slabChainAnalysis(g, from, to, riseTiles, gapTiles);
+    if (chain) return chain;
+
     mode = "rebound";
     verticalLimitTiles = bottomReboundLimitTiles(from.h);
     const fallThroughTiles = LEVEL_REACH_LIMITS.minimumFallThroughByRows[Math.min(from.h, LEVEL_REACH_LIMITS.maxPassThroughRows)];
@@ -890,14 +926,19 @@ function nodeContainsColumn(node, c) {
 
 function findStartNodes(level, nodes) {
   return nodes.filter((node) =>
+    node.standable &&
     nodeContainsColumn(node, level.spawn.c) &&
     node.r >= level.spawn.r &&
-    node.r <= level.spawn.r + 1
+    node.r <= level.spawn.r + 1 &&
+    hasPlayerClearance(level, node.r, level.spawn.c)
   );
 }
 
 function isGoalNode(level, node) {
-  return node.r === level.goal.r + 1 && nodeContainsColumn(node, level.goal.c);
+  return node.standable &&
+    node.r === level.goal.r + 1 &&
+    nodeContainsColumn(node, level.goal.c) &&
+    hasPlayerClearance(level, node.r, level.goal.c);
 }
 
 function explainBestBlockedMove(g, nodes, reachable) {

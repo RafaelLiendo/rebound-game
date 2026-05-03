@@ -73,11 +73,14 @@ There is no build step. `index.html` can be opened directly in a browser.
   horizontal and vertical player movement through `updateCamera()`, clamping to
   the active level bounds.
 - Authored levels must be reachable under the measured player limits in
-  `smoke-test.js`. The reachability smoke test derives standable terrain and
-  mover surfaces from the map, then checks spawn-to-goal traversal using normal
-  jump height, rebound height by mass depth, pass-through caps, horizontal
-  reach, and two-row player clearance. When changing terrain or mover geometry,
-  prefer fixing unreachable gaps in the map over loosening the audit.
+  `smoke-test.js`. The reachability smoke test derives terrain matter, standable
+  surfaces, mover path extents, and shallow slab-chain matter from the map, then
+  checks spawn-to-goal traversal using normal jump height, rebound height by
+  mass depth, pass-through caps, horizontal reach, and two-row player clearance
+  for actual landing shelves. Do not add fake scaffold terrain only to appease
+  the audit; if a route is mechanically valid through chain rebounds, moving
+  matter, or ceiling-hang setup, teach or tune the audit to model that mechanic
+  directly.
 - If level switching changes, keep `window.gameInternals` useful for tests by
   exposing live getters for active level data, dimensions, and camera position.
 - Rebound tuning is intentionally target-based. `reboundDepthLevel()` is the
