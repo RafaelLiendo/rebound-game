@@ -1424,6 +1424,8 @@
       reboundTargetRiseTiles: 0,
       reboundLaunchVelocity: 0,
       reboundExitY: null,
+      reboundEntity: null,
+      reboundIgnoreEntity: null,
       stuckTimer: 0,
       flashTimer: 0
     };
@@ -1453,6 +1455,8 @@
       player.reboundTargetRiseTiles = 0;
       player.reboundLaunchVelocity = 0;
       player.reboundExitY = null;
+      player.reboundEntity = null;
+      player.reboundIgnoreEntity = null;
       player.stuckTimer = 0;
       player.flashTimer = 0;
       particles.length = 0;
@@ -1598,6 +1602,16 @@
         if (e.solid && rectsOverlap(rect, er)) out.push(er);
       }
       return out;
+    }
+
+    function collisionMatter(rect) {
+      var hits = overlappingMatter(rect);
+      if (!player.reboundIgnoreEntity || player.reboundAirborneTimer <= 0 || player.vy >= 0) {
+        return hits;
+      }
+      return hits.filter(function (hit) {
+        return hit.entity !== player.reboundIgnoreEntity;
+      });
     }
 
     function overlappingSolidMatter(rect) {
@@ -1767,8 +1781,9 @@
       for (var i = 0; i < entities.length; i++) {
         var e = entities[i];
         if (!e.solid || !rectsOverlap(sample, entityRect(e))) continue;
+        var massY = Math.min(e.y, e.prevY);
         var massPixels = e.h;
-        var depthPixels = clamp(rect.y + rect.h - e.y, 0, Math.max(CONFIG.PLAYER_H + TS * 2, massPixels));
+        var depthPixels = clamp(rect.y + rect.h - massY, 0, Math.max(CONFIG.PLAYER_H + TS * 2, massPixels));
         var tuning = reboundTuning(depthPixels, massPixels);
         var targetRiseTiles = tuning.targetRiseTiles;
         var launchVelocity = tuning.launchVelocity;
@@ -1784,10 +1799,10 @@
             massRows: Math.ceil(massPixels / TS),
             targetRiseTiles: targetRiseTiles,
             launchVelocity: launchVelocity,
-            centerY: e.y + e.h / 2,
-            topY: e.y,
-            botY: e.y + e.h,
-            exitY: e.y - rect.h,
+            centerY: massY + e.h / 2,
+            topY: massY,
+            botY: massY + e.h,
+            exitY: massY - rect.h,
             entity: e,
             stuck: false
           };
@@ -1912,6 +1927,8 @@
       player.reboundTargetRiseTiles = 0;
       player.reboundLaunchVelocity = 0;
       player.reboundExitY = null;
+      player.reboundEntity = null;
+      player.reboundIgnoreEntity = null;
       shake = 16;
       spawnRipple(player.x + CONFIG.PLAYER_W / 2, player.y + CONFIG.PLAYER_H / 2, 0.8);
     }
@@ -1932,12 +1949,20 @@
       player.reboundTargetRiseTiles = result && result.targetRiseTiles ? result.targetRiseTiles : 0;
       player.reboundLaunchVelocity = result && result.launchVelocity ? result.launchVelocity : 0;
       player.reboundExitY = result && result.exitY !== undefined ? result.exitY : null;
+      player.reboundEntity = result && result.entity ? result.entity : null;
       var visualCharge = clamp(player.reboundMeterLevel / CONFIG.REBOUND_TUNED_MAX_ROWS, 0, 1);
       shake = 5 + visualCharge * 16;
       spawnRipple(player.x + CONFIG.PLAYER_W / 2, player.y + CONFIG.PLAYER_H / 2, visualCharge);
       for (var i = 0; i < 22; i++) {
         spawnMatterParticle(player.x + CONFIG.PLAYER_W / 2, player.y + CONFIG.PLAYER_H / 2, visualCharge, true);
       }
+    }
+
+    function currentReboundExitY() {
+      if (player.reboundEntity && player.reboundEntity.solid) {
+        return player.reboundEntity.y - CONFIG.PLAYER_H;
+      }
+      return player.reboundExitY;
     }
 
     function consumeReboundExit() {
@@ -1953,6 +1978,8 @@
         player.reboundAirborneTimer = preserveChainBoost ? CONFIG.REBOUND_STATE_DURATION : 0;
         player.embeddedDepth = 0;
         player.reboundMeterLevel = 0;
+        player.reboundEntity = null;
+        player.reboundIgnoreEntity = null;
         return;
       }
       if (overlappingMatter(playerRect()).length > 0) {
@@ -1970,7 +1997,9 @@
       player.reboundStrength = 0;
       player.reboundTargetRiseTiles = 0;
       player.reboundLaunchVelocity = 0;
+      player.reboundIgnoreEntity = player.reboundEntity;
       player.reboundExitY = null;
+      player.reboundEntity = null;
     }
 
     function moveAndCollide(dx, dy) {
@@ -1986,7 +2015,7 @@
         var stepAmount = Math.min(1, remaining) * sign;
         if (axis === "x") {
           player.x += stepAmount;
-          var xHits = overlappingMatter(playerRect());
+          var xHits = collisionMatter(playerRect());
           if (xHits.length > 0) {
             if (sign > 0) {
               var minX = xHits.reduce(function (m, t) { return Math.min(m, t.x); }, Infinity);
@@ -2000,7 +2029,7 @@
           }
         } else {
           player.y += stepAmount;
-          var yHits = overlappingMatter(playerRect());
+          var yHits = collisionMatter(playerRect());
           if (yHits.length > 0) {
             if (sign > 0) {
               var minY = yHits.reduce(function (m, t) { return Math.min(m, t.y); }, Infinity);
@@ -2021,13 +2050,13 @@
     }
 
     function probeGrounded() {
-      if (overlappingMatter(playerRect()).length > 0) {
+      if (collisionMatter(playerRect()).length > 0) {
         player.grounded = false;
         return false;
       }
       var rect = playerRect();
       var probe = { x: rect.x, y: rect.y + 1, w: rect.w, h: rect.h };
-      player.grounded = overlappingMatter(probe).length > 0;
+      player.grounded = collisionMatter(probe).length > 0;
       return player.grounded;
     }
 
@@ -2049,6 +2078,8 @@
       player.reboundTargetRiseTiles = 0;
       player.reboundLaunchVelocity = 0;
       player.reboundExitY = null;
+      player.reboundEntity = null;
+      player.reboundIgnoreEntity = null;
       probeGrounded();
     }
 
@@ -2076,6 +2107,7 @@
 
     function carryPlayerOnEntities() {
       if (player.state !== "solid" && !(player.state === "rebounding" && player.reboundSurfaced)) return;
+      if (player.reboundAirborneTimer > 0 && player.vy < 0) return;
       for (var i = 0; i < entities.length; i++) {
         var e = entities[i];
         if (!e.solid || e.type !== "mover" || !standingOnPreviousEntity(e)) continue;
@@ -2167,6 +2199,7 @@
         player.jumpBufferTimer = 0;
         keyEdge.Space = false;
       }
+      if (ceilingHang.active && permeatePressed()) player.ceilingPullMode = "space";
       if (ceilingHang.active && assistHeld()) player.ceilingPullMode = "assist";
       if (player.ceilingPullMode === "assist" && !assistHeld()) player.ceilingPullMode = null;
       if (player.ceilingPullMode === "space" && !ceilingHang.active) player.ceilingPullMode = null;
@@ -2182,6 +2215,7 @@
 
       if (player.reboundAirborneTimer > 0 && player.state !== "rebounding" && player.vy >= 0) {
         player.reboundAirborneTimer = 0;
+        player.reboundIgnoreEntity = null;
       }
 
       if (permeatePressed() && player.permeateUntilClear) {
@@ -2191,6 +2225,7 @@
       if (player.state === "solid" && permeatePressed()) {
         player.state = "permeating";
         player.reboundAirborneTimer = 0;
+        player.reboundIgnoreEntity = null;
         player.permeateUntilClear = false;
         player.permeateStartFeetY = player.y + CONFIG.PLAYER_H;
       }
@@ -2203,10 +2238,6 @@
         if (autoChainActive) {
           player.queuedPermeate = true;
           player.queuedPermeateSource = "auto";
-        }
-        if (player.queuedPermeateSource === "manual" && permeateReleased()) {
-          player.queuedPermeate = false;
-          player.queuedPermeateSource = null;
         }
         if (player.queuedPermeateSource === "auto" && (!permeateHeld() || !assistHeld())) {
           player.queuedPermeate = false;
@@ -2232,6 +2263,9 @@
           if (rebound.fire) {
             triggerReboundOrStuck(rebound);
             skipVerticalForce = true;
+          } else if (ceilingHang.active && player.ceilingPullMode !== null) {
+            // A quick manual tap can opt into the same non-auto pull as Space
+            // without canceling permeation before the lower body reaches matter.
           } else if (fullOverlap) {
             player.permeateUntilClear = true;
           } else {
@@ -2323,18 +2357,15 @@
             player.vy = Math.min(CONFIG.MAX_FALL_SPEED, player.vy + CONFIG.GRAVITY);
           }
         } else if (player.state === "rebounding") {
+          var reboundExitY = currentReboundExitY();
           var travelingToExit = !player.reboundSurfaced &&
-            (player.reboundExitY === null || player.y > player.reboundExitY);
+            (reboundExitY === null || player.y > reboundExitY);
           if (travelingToExit) {
             // Rebound target height is measured from the planned exit. Travel
             // to the planned exit is direct, then surfacing applies the exact launch
             // velocity needed for the remaining open-air rise.
             player.vy = Math.min(player.vy, -CONFIG.REBOUND_SURFACE_SPEED);
-          } else {
-            if (!player.reboundSurfaced) {
-              player.reboundSurfaced = true;
-              player.reboundAirborneTimer = CONFIG.REBOUND_STATE_DURATION;
-            }
+          } else if (player.reboundSurfaced) {
             player.vy = Math.min(CONFIG.MAX_FALL_SPEED, player.vy + CONFIG.GRAVITY);
             player.reboundAirborneTimer -= dt;
           }
@@ -2345,6 +2376,7 @@
 
       if (player.reboundAirborneTimer > 0 && player.state !== "rebounding" && player.vy >= 0) {
         player.reboundAirborneTimer = 0;
+        player.reboundIgnoreEntity = null;
         player.vx = clamp(player.vx, -CONFIG.MAX_RUN_SPEED, CONFIG.MAX_RUN_SPEED);
       }
 
@@ -2382,12 +2414,13 @@
 
       if (player.state === "rebounding") {
         if (!player.reboundSurfaced) {
-          var reachedExit = player.reboundExitY === null ?
+          var currentExitY = currentReboundExitY();
+          var reachedExit = currentExitY === null ?
             overlappingMatter(playerRect()).length === 0 :
-            player.y <= player.reboundExitY;
+            player.y <= currentExitY;
           if (reachedExit) {
-            if (player.reboundExitY !== null) {
-              player.y = player.reboundExitY;
+            if (currentExitY !== null) {
+              player.y = currentExitY;
             }
             player.vy = -player.reboundLaunchVelocity;
             player.reboundSurfaced = true;
@@ -2404,6 +2437,7 @@
         player.state = "won";
         player.won = true;
         player.reboundAirborneTimer = 0;
+        player.reboundIgnoreEntity = null;
         player.embeddedDepth = 0;
         player.reboundMeterLevel = 0;
         spawnRipple(goalRect.x + goalRect.w / 2, goalRect.y + goalRect.h / 2, 1);
@@ -2956,6 +2990,7 @@
       matterMassInfo: matterMassInfo,
       shouldRebound: shouldRebound,
       reboundMeterLevel: reboundMeterLevel,
+      currentReboundExitY: currentReboundExitY,
       reboundMoveBoostActive: reboundMoveBoostActive,
       moveAndCollide: moveAndCollide,
       probeGrounded: probeGrounded,

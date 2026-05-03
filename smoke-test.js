@@ -112,6 +112,8 @@ function setPlayer(g, x, y, state = "solid") {
   p.reboundTargetRiseTiles = 0;
   p.reboundLaunchVelocity = 0;
   p.reboundExitY = null;
+  p.reboundEntity = null;
+  p.reboundIgnoreEntity = null;
   p.stuckTimer = 0;
   p.flashTimer = 0;
   g.probeGrounded();
@@ -998,6 +1000,58 @@ function testManualQueueConsumesOnSurface() {
   assert(surfaced, "player never surfaced during rebound");
 }
 
+function testManualTapChainKeepsQueuedPermeation() {
+  const g = makeGame();
+  g.loadLevel(0);
+  setPlayer(g, cellX(g, 7), standY(g, 60), "solid");
+
+  press(g, "ShiftLeft");
+  step(g, 60);
+  assert(g.overlappingSolidTiles(g.playerRect()).length > 0, "manual tap chain never entered the first mass");
+  release(g, "ShiftLeft");
+  step(g);
+  assert(g.player.state === "rebounding", "manual tap chain did not start the first rebound");
+
+  let releaseTapNext = false;
+  let chainStarted = true;
+  let reboundStarts = 1;
+  let previousState = g.player.state;
+
+  for (let i = 0; i < 2400; i++) {
+    if (releaseTapNext) {
+      release(g, "ShiftLeft");
+      releaseTapNext = false;
+    } else if (g.player.state === "rebounding" && !g.player.queuedPermeate) {
+      press(g, "ShiftLeft");
+      releaseTapNext = true;
+    } else if (
+      g.player.state === "permeating" &&
+      !g.player.permeateUntilClear &&
+      g.overlappingMatter(g.playerRect()).length > 0
+    ) {
+      press(g, "ShiftLeft");
+      releaseTapNext = true;
+    }
+
+    step(g);
+
+    if (previousState !== "rebounding" && g.player.state === "rebounding") reboundStarts++;
+    previousState = g.player.state;
+    if (g.player.state === "permeating" || g.player.state === "rebounding") chainStarted = true;
+
+    assert(g.player.state !== "stuck", "manual tap chain entered stuck recovery");
+    assert(!chainStarted || g.player.state !== "solid", "manual tap chain became solid before reaching the top");
+    assert(g.player.stuckTimer === 0, "manual tap chain armed stuck respawn");
+
+    if (g.player.won) {
+      assert(reboundStarts >= 4, "manual tap chain did not perform enough rebounds");
+      return;
+    }
+  }
+
+  throw new Error("manual tap chain did not reach the top goal");
+}
+
 function testReboundHorizontalBoostScalesMovement() {
   const g = makeGame();
   const fixture = buildMeasurementFixture(g, { topRow: 24, leftCol: 10, massRows: 5, cols: 3 });
@@ -1860,6 +1914,74 @@ function testDeepDynamicMassRewardsBottomDive() {
   }
 }
 
+function testMovingReboundMassUsesLiveExit() {
+  const g = makeGame();
+  const originalLength = g.LEVELS.length;
+
+  function runCase(name, phase, expectedDirection) {
+    pushDynamicFixture(g, {
+      kind: "mover",
+      name: name,
+      char: "A",
+      role: "rebound",
+      motion: { kind: "vertical", amplitude: { x: 0, y: 96 }, speed: 1.6, phase }
+    }, { char: "A", c: 12, r: 27, cols: 4, rows: 5 });
+
+    const e = g.entities[0];
+    setPlayer(g, e.x + 32, e.y + e.h - g.CONFIG.PLAYER_H, "permeating");
+    const rebound = g.shouldRebound(g.playerRect());
+    assert(rebound.fire === true, name + " did not start from a valid dynamic rebound");
+    assert(rebound.entity === e, name + " rebound did not track the source mover");
+
+    release(g, "ShiftLeft");
+    step(g);
+    assert(g.player.state === "rebounding", name + " release did not start rebound");
+    assert(g.player.reboundEntity === e, name + " did not store the live rebound entity");
+    assert(
+      expectedDirection === "up" ? e.dy < 0 : e.dy > 0,
+      name + " mover did not move " + expectedDirection + " on rebound start"
+    );
+
+    let surfaced = false;
+    let surfaceExitY = null;
+    let peakY = Infinity;
+    for (let i = 0; i < 360; i++) {
+      const wasRebounding = g.player.state === "rebounding";
+      step(g);
+      assert(g.player.state !== "stuck", name + " moving rebound entered stuck recovery");
+
+      if (!surfaced && wasRebounding && g.player.state !== "rebounding") {
+        surfaced = true;
+        surfaceExitY = e.y - g.CONFIG.PLAYER_H;
+        assertApprox(g.player.y, surfaceExitY, 0.001, name + " did not surface at the mover's live top edge");
+        assert(g.overlappingSolidEntities(g.playerRect()).length === 0, name + " surfaced while still inside the mover");
+        assert(g.player.vy < 0, name + " did not launch upward after surfacing");
+      }
+
+      if (surfaced) {
+        peakY = Math.min(peakY, g.player.y);
+        if (g.player.vy > 0 && g.player.y > peakY + 5) break;
+      }
+    }
+
+    assert(surfaced, name + " never surfaced from the moving rebound mass");
+    assertApprox(
+      tilesFromPixels(g, surfaceExitY - peakY),
+      rebound.targetRiseTiles,
+      0.08,
+      name + " did not preserve rebound target height from the live exit"
+    );
+  }
+
+  try {
+    runCase("upward live-exit mass", Math.PI, "up");
+    runCase("downward live-exit mass", 0, "down");
+  } finally {
+    g.LEVELS.length = originalLength;
+    g.loadLevel(0);
+  }
+}
+
 function testAsteroidImpactRecoversToCheckpoint() {
   const g = makeGame();
   const originalLength = g.LEVELS.length;
@@ -1903,6 +2025,7 @@ const tests = [
   ["bug 2 tall mass rebounds once", testBugTwoTallMassReboundsOnce],
   ["auto assist climbs tuned thick stack", testAutoAssistClimbsTunedThickStack],
   ["manual queue consumes on surface", testManualQueueConsumesOnSurface],
+  ["manual tap chain keeps queued permeation", testManualTapChainKeepsQueuedPermeation],
   ["rebound horizontal boost scales movement", testReboundHorizontalBoostScalesMovement],
   ["Ctrl chain rebounds keep horizontal boost", testCtrlChainReboundsKeepHorizontalBoost],
   ["upper-body-only release waits until clear", testUpperBodyOnlyReleaseDoesNotRebound],
@@ -1934,6 +2057,7 @@ const tests = [
   ["solid player rides moving platform", testSolidPlayerRidesMovingPlatform],
   ["dynamic solid can trigger rebound", testDynamicSolidCanTriggerRebound],
   ["deep dynamic mass rewards bottom dive", testDeepDynamicMassRewardsBottomDive],
+  ["moving rebound mass uses live exit", testMovingReboundMassUsesLiveExit],
   ["asteroid impact recovers to checkpoint", testAsteroidImpactRecoversToCheckpoint]
 ];
 
