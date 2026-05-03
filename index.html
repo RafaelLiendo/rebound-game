@@ -363,7 +363,6 @@
       REBOUND_HORIZONTAL_MULTIPLIER: 1.5,
       REBOUND_STATE_DURATION: 0.4,
       REBOUND_SURFACE_SPEED: 16,
-      MANUAL_CHAIN_GRACE_TIME: 1,
       REBOUND_MAX_CHARGE: 2.4,
       REBOUND_SHALLOW_MIN_FACTOR: 0.22,
       REBOUND_TUNED_MAX_ROWS: 5,
@@ -1416,9 +1415,7 @@
       reboundSurfaced: false,
       queuedPermeate: false,
       queuedPermeateSource: null,
-      manualReboundQueued: false,
-      manualChainTimer: 0,
-      manualChainGraceTimer: 0,
+      chainLocked: false,
       permeateUntilClear: false,
       permeateStartFeetY: null,
       ceilingPullMode: null,
@@ -1430,7 +1427,6 @@
       reboundExitY: null,
       reboundEntity: null,
       reboundIgnoreEntity: null,
-      reboundSource: null,
       stuckTimer: 0,
       flashTimer: 0
     };
@@ -1451,9 +1447,7 @@
       player.reboundSurfaced = false;
       player.queuedPermeate = false;
       player.queuedPermeateSource = null;
-      player.manualReboundQueued = false;
-      player.manualChainTimer = 0;
-      player.manualChainGraceTimer = 0;
+      player.chainLocked = false;
       player.permeateUntilClear = false;
       player.permeateStartFeetY = null;
       player.ceilingPullMode = null;
@@ -1465,7 +1459,6 @@
       player.reboundExitY = null;
       player.reboundEntity = null;
       player.reboundIgnoreEntity = null;
-      player.reboundSource = null;
       player.stuckTimer = 0;
       player.flashTimer = 0;
       particles.length = 0;
@@ -1927,9 +1920,7 @@
       player.reboundAirborneTimer = 0;
       player.queuedPermeate = false;
       player.queuedPermeateSource = null;
-      player.manualReboundQueued = false;
-      player.manualChainTimer = 0;
-      player.manualChainGraceTimer = 0;
+      player.chainLocked = false;
       player.permeateUntilClear = false;
       player.permeateStartFeetY = null;
       player.ceilingPullMode = null;
@@ -1941,7 +1932,6 @@
       player.reboundExitY = null;
       player.reboundEntity = null;
       player.reboundIgnoreEntity = null;
-      player.reboundSource = null;
       shake = 16;
       spawnRipple(player.x + CONFIG.PLAYER_W / 2, player.y + CONFIG.PLAYER_H / 2, 0.8);
     }
@@ -1956,10 +1946,6 @@
       player.ceilingPullMode = null;
       player.queuedPermeate = false;
       player.queuedPermeateSource = null;
-      player.manualReboundQueued = false;
-      player.manualChainTimer = 0;
-      player.manualChainGraceTimer = 0;
-      player.reboundSource = null;
       player.embeddedDepth = result && result.depth ? result.depth : 0;
       player.reboundMeterLevel = result && result.meterLevel ? result.meterLevel : 0;
       player.reboundStrength = result && result.strength ? result.strength : 0.35;
@@ -1982,44 +1968,11 @@
       return player.reboundExitY;
     }
 
-    function clearManualChainBuffer() {
-      player.manualReboundQueued = false;
-      player.manualChainTimer = 0;
+    function clearChainLock() {
+      player.chainLocked = false;
     }
 
-    function clearManualChainState() {
-      clearManualChainBuffer();
-      player.manualChainGraceTimer = 0;
-    }
-
-    function armManualChainBuffer() {
-      player.manualReboundQueued = true;
-      player.manualChainTimer = CONFIG.MANUAL_CHAIN_GRACE_TIME;
-    }
-
-    function startManualChainGrace() {
-      player.manualChainGraceTimer = CONFIG.MANUAL_CHAIN_GRACE_TIME;
-    }
-
-    function manualChainGraceActive() {
-      return player.manualChainGraceTimer > 0;
-    }
-
-    function finishManualChainGrace() {
-      clearManualChainState();
-      if (player.state !== "permeating") return;
-      if (overlappingMatter(playerRect()).length > 0) {
-        player.permeateUntilClear = true;
-      } else if (!permeateHeld()) {
-        player.state = "solid";
-        player.permeateStartFeetY = null;
-        player.ceilingPullMode = null;
-        player.embeddedDepth = 0;
-        player.reboundMeterLevel = 0;
-      }
-    }
-
-    function enterManualChainGracePermeation() {
+    function enterChainPermeation() {
       player.state = "permeating";
       player.permeateUntilClear = false;
       player.permeateStartFeetY = player.y + CONFIG.PLAYER_H;
@@ -2036,12 +1989,14 @@
       player.reboundIgnoreEntity = player.reboundEntity;
       player.reboundExitY = null;
       player.reboundEntity = null;
-      player.reboundSource = null;
-      startManualChainGrace();
+      player.chainLocked = true;
     }
 
-    function manualChainOpportunityAhead() {
-      if (overlappingMatter(playerRect()).length > 0) return false;
+    function chainMatterAhead() {
+      if (!player.chainLocked && player.reboundTargetRiseTiles > 4) return false;
+      if (overlappingMatter(playerRect()).length > 0) {
+        return !bottomHalfOverlapsSolid(playerRect());
+      }
       var rect = playerRect();
       for (var offset = 1; offset <= TS * 2; offset += TS / 2) {
         if (overlappingMatter({ x: rect.x, y: rect.y - offset, w: rect.w, h: rect.h }).length > 0) {
@@ -2054,36 +2009,23 @@
     function consumeReboundExit() {
       if (player.queuedPermeate) {
         var preserveChainBoost = player.queuedPermeateSource === "auto";
-        var manualReboundExit = player.queuedPermeateSource === "manual" || player.reboundSource === "manual";
-        var preserveManualBuffer = player.queuedPermeateSource === "manual" && player.manualReboundQueued;
-        var manualChainGrace = player.queuedPermeateSource === "manual" && !preserveManualBuffer;
         player.state = "permeating";
         player.permeateUntilClear = false;
         player.permeateStartFeetY = player.y + CONFIG.PLAYER_H;
         player.ceilingPullMode = null;
         player.queuedPermeate = false;
         player.queuedPermeateSource = null;
-        if (manualReboundExit) {
-          startManualChainGrace();
-        }
-        if (preserveManualBuffer) {
-          armManualChainBuffer();
-        } else if (manualChainGrace) {
-          player.manualChainTimer = CONFIG.MANUAL_CHAIN_GRACE_TIME;
-        } else if (preserveChainBoost) {
-          clearManualChainState();
-        }
+        if (chainMatterAhead()) player.chainLocked = true;
         player.reboundSurfaced = false;
         player.reboundAirborneTimer = preserveChainBoost ? CONFIG.REBOUND_STATE_DURATION : 0;
         player.embeddedDepth = 0;
         player.reboundMeterLevel = 0;
         player.reboundEntity = null;
         player.reboundIgnoreEntity = null;
-        player.reboundSource = null;
         return;
       }
-      if (player.reboundSource === "manual" && manualChainOpportunityAhead()) {
-        enterManualChainGracePermeation();
+      if (chainMatterAhead()) {
+        enterChainPermeation();
         return;
       }
       if (overlappingMatter(playerRect()).length > 0) {
@@ -2094,7 +2036,7 @@
       player.reboundSurfaced = false;
       player.queuedPermeate = false;
       player.queuedPermeateSource = null;
-      clearManualChainState();
+      clearChainLock();
       player.permeateStartFeetY = null;
       player.ceilingPullMode = null;
       player.embeddedDepth = 0;
@@ -2105,7 +2047,6 @@
       player.reboundIgnoreEntity = player.reboundEntity;
       player.reboundExitY = null;
       player.reboundEntity = null;
-      player.reboundSource = null;
     }
 
     function moveAndCollide(dx, dy) {
@@ -2177,7 +2118,7 @@
       player.reboundAirborneTimer = 0;
       player.queuedPermeate = false;
       player.queuedPermeateSource = null;
-      clearManualChainState();
+      clearChainLock();
       player.permeateStartFeetY = null;
       player.embeddedDepth = 0;
       player.reboundMeterLevel = 0;
@@ -2187,7 +2128,6 @@
       player.reboundExitY = null;
       player.reboundEntity = null;
       player.reboundIgnoreEntity = null;
-      player.reboundSource = null;
       probeGrounded();
     }
 
@@ -2248,11 +2188,6 @@
       }
     }
 
-    function triggerReboundOrStuckFrom(result, source) {
-      triggerReboundOrStuck(result);
-      if (player.state === "rebounding") player.reboundSource = source || null;
-    }
-
     function reboundMoveBoostActive() {
       return player.state === "rebounding" || (player.reboundAirborneTimer > 0 && player.vy < 0);
     }
@@ -2272,16 +2207,6 @@
       player.coyoteTimer = Math.max(0, player.coyoteTimer - 1);
       player.jumpBufferTimer = Math.max(0, player.jumpBufferTimer - 1);
       player.flashTimer = Math.max(0, player.flashTimer - dt);
-      if (player.manualChainTimer > 0 && player.state !== "rebounding") {
-        player.manualChainTimer = Math.max(0, player.manualChainTimer - dt);
-        if (player.manualChainTimer <= 0) {
-          clearManualChainBuffer();
-        }
-      }
-      if (player.manualChainGraceTimer > 0 && player.state !== "rebounding") {
-        player.manualChainGraceTimer = Math.max(0, player.manualChainGraceTimer - dt);
-        if (player.manualChainGraceTimer <= 0) finishManualChainGrace();
-      }
       updateEffects(dt);
 
       if (keyEdge.KeyR) {
@@ -2322,7 +2247,7 @@
         player.jumpBufferTimer = 0;
         keyEdge.Space = false;
       }
-      if (ceilingHang.active && (permeatePressed() || player.manualReboundQueued || manualChainGraceActive())) {
+      if (ceilingHang.active && (permeatePressed() || player.chainLocked)) {
         player.ceilingPullMode = "space";
       }
       if (ceilingHang.active && assistHeld()) player.ceilingPullMode = "assist";
@@ -2351,7 +2276,7 @@
         player.state = "permeating";
         player.reboundAirborneTimer = 0;
         player.reboundIgnoreEntity = null;
-        clearManualChainState();
+        clearChainLock();
         player.permeateUntilClear = false;
         player.permeateStartFeetY = player.y + CONFIG.PLAYER_H;
       }
@@ -2361,13 +2286,10 @@
           player.queuedPermeate = true;
           player.queuedPermeateSource = "manual";
         }
-        if (player.queuedPermeateSource === "manual" && permeateReleased()) {
-          player.manualReboundQueued = true;
-        }
         if (autoChainActive) {
           player.queuedPermeate = true;
           player.queuedPermeateSource = "auto";
-          clearManualChainState();
+          clearChainLock();
         }
         if (player.queuedPermeateSource === "auto" && (!permeateHeld() || !assistHeld())) {
           player.queuedPermeate = false;
@@ -2382,30 +2304,17 @@
         var rebound = shouldRebound(rect);
         player.embeddedDepth = rebound.depth || (fullOverlap ? mass.pixels : 0);
         player.reboundMeterLevel = rebound.meterLevel || (fullOverlap ? mass.meterLevel : 0);
-        var manualBufferedRebound = player.manualReboundQueued && rebound.fire;
-        if ((autoChainActive || ceilingAssistReady || manualBufferedRebound) && rebound.fire) {
-          if (manualBufferedRebound) clearManualChainState();
-          triggerReboundOrStuckFrom(rebound, manualBufferedRebound ? "manual" : "auto");
+        if ((autoChainActive || ceilingAssistReady || player.chainLocked) && rebound.fire) {
+          triggerReboundOrStuck(rebound);
           if (player.state === "rebounding" && genericAutoChainActive) {
             player.queuedPermeate = true;
             player.queuedPermeateSource = "auto";
-          } else if (player.state === "rebounding" && manualBufferedRebound) {
-            player.queuedPermeate = true;
-            player.queuedPermeateSource = "manual";
           }
           skipVerticalForce = true;
         } else if (permeateReleased() && !player.permeateUntilClear) {
           if (rebound.fire) {
-            var manualGraceRelease = player.manualChainTimer > 0;
-            if (manualGraceRelease) clearManualChainState();
-            triggerReboundOrStuckFrom(rebound, "manual");
-            if (player.state === "rebounding" && manualGraceRelease) {
-              player.queuedPermeate = true;
-              player.queuedPermeateSource = "manual";
-            }
+            triggerReboundOrStuck(rebound);
             skipVerticalForce = true;
-          } else if (player.manualReboundQueued || player.manualChainTimer > 0 || manualChainGraceActive()) {
-            armManualChainBuffer();
           } else if (ceilingHang.active && player.ceilingPullMode !== null) {
             // A quick manual tap can opt into the same non-auto pull as Space
             // without canceling permeation before the lower body reaches matter.
@@ -2539,7 +2448,7 @@
           bottomHalfFullyInsideMatter(playerRect())) {
         var assistedRebound = shouldRebound(playerRect());
         if (assistedRebound.fire) {
-          triggerReboundOrStuckFrom(assistedRebound, "auto");
+          triggerReboundOrStuck(assistedRebound);
           if (player.state === "rebounding" && genericAutoChainActive) {
             player.queuedPermeate = true;
             player.queuedPermeateSource = "auto";
@@ -2581,7 +2490,7 @@
         player.won = true;
         player.reboundAirborneTimer = 0;
         player.reboundIgnoreEntity = null;
-        clearManualChainState();
+        clearChainLock();
         player.embeddedDepth = 0;
         player.reboundMeterLevel = 0;
         spawnRipple(goalRect.x + goalRect.w / 2, goalRect.y + goalRect.h / 2, 1);

@@ -96,6 +96,11 @@ There is no build step. `index.html` can be opened directly in a browser.
   at the planned exit. Do not let Ctrl+Shift preserve the artificial surfacing
   speed as extra rebound height; keep smoke coverage comparing release and
   Ctrl+Shift rebound peaks, plus chain responsiveness.
+- Shallow stacked rebound chains should be governed by the `player.chainLocked`
+  flow: once a chain has started and there is more chain matter ahead in the
+  player's vertical lane, the player should stay in permeating/rebounding
+  rather than becoming `solid` or `stuck`. Keep this limited to shallow
+  slab-ladder style chains so deep blocked upward escapes still enter `stuck`.
 - Rebound horizontal boost is separate from vertical launch tuning: while
   `reboundMoveBoostActive()` is true, left/right movement uses
   `REBOUND_HORIZONTAL_MULTIPLIER` (currently 1.5x). Keep this derived from the
@@ -141,6 +146,10 @@ Maintain the feel described in `Plan.md`:
   lower half is fully embedded.
 - Blocked upward escape should enter `stuck` briefly and recover cleanly.
 - Manual and assisted chain rebound should remain responsive.
+- Manual shallow chain routes should not require human frame-perfect Shift
+  tapping; after the first valid manual release in a stacked chain, the player
+  should not become `solid` or `stuck` until the route fully exits near the
+  top.
 - Rebound arcs should allow stronger horizontal shaping during the upward
   launch, including Ctrl+Shift chained rebounds.
 - Reset with `R` should respawn at the largest checkpoint reached in the
@@ -161,6 +170,8 @@ Add smoke coverage when changing:
 - collision or tile parsing
 - dynamic matter, moving platforms, asteroids, or checkpoints
 - rebound/stuck behavior
+- shallow manual chain-lock behavior, including no-input completion of the
+  first stacked chain and preservation of blocked-escape `stuck` recovery
 - rebound horizontal boost behavior, including the active window, speed cap,
   apex cleanup, and Ctrl+Shift chain handoff
 - permeation momentum, including short-fall catch behavior and high-fall
