@@ -184,6 +184,10 @@
       min-height: 18px;
     }
 
+    .mobileControl {
+      display: none;
+    }
+
     .control:nth-child(-n + 2) {
       grid-column: span 1;
     }
@@ -396,6 +400,48 @@
         grid-column: auto;
       }
     }
+
+    @media (pointer: coarse) and (orientation: landscape) {
+      .hud {
+        top: max(8px, calc(env(safe-area-inset-top) + 8px));
+        grid-template-columns: max-content 1fr max-content;
+        grid-template-areas:
+          "readout . controls";
+        gap: 10px;
+      }
+
+      .controls {
+        display: grid;
+        grid-template-rows: repeat(2, minmax(0, 1fr));
+        grid-auto-flow: column;
+        gap: 4px 10px;
+        max-width: min(56vw, 440px);
+        padding: 7px 9px;
+        font-size: 10px;
+      }
+
+      .desktopControl {
+        display: none;
+      }
+
+      .mobileControl {
+        display: flex;
+      }
+
+      .control,
+      .control:nth-child(-n + 2),
+      .control:nth-child(n + 3) {
+        grid-column: auto;
+      }
+
+      .control-name {
+        font-size: 10px;
+      }
+
+      .control-hint {
+        font-size: 9px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -419,31 +465,59 @@
         </div>
       </div>
       <div class="controls">
-        <span class="control">
+        <span class="control desktopControl">
           <span class="key">&larr;</span>
           <span class="key">&rarr;</span>
           <span class="control-copy">
             <span class="control-name">Move</span>
           </span>
         </span>
-        <span class="control">
+        <span class="control desktopControl">
           <span class="key">&nbsp;&nbsp;&nbsp;&nbsp;Space&nbsp;&nbsp;&nbsp;&nbsp;</span>
           <span class="control-copy">
             <span class="control-name">Jump</span>
           </span>
         </span>
-        <span class="control">
+        <span class="control desktopControl">
           <span class="key">Shift</span>
           <span class="control-copy">
             <span class="control-name">Permeate</span>
             <span class="control-hint">hold to sink, release to rebound</span>
           </span>
         </span>
-        <span class="control">
+        <span class="control desktopControl">
           <span class="key">Ctrl+Shift</span>
           <span class="control-copy">
             <span class="control-name">Chain</span>
             <span class="control-hint">Permeate/Rebound</span>
+          </span>
+        </span>
+        <span class="control mobileControl">
+          <span class="key">Stick</span>
+          <span class="control-copy">
+            <span class="control-name">Move</span>
+            <span class="control-hint">drag up to jump</span>
+          </span>
+        </span>
+        <span class="control mobileControl">
+          <span class="key">Shift</span>
+          <span class="control-copy">
+            <span class="control-name">Hold Shift</span>
+            <span class="control-hint">sink into matter</span>
+          </span>
+        </span>
+        <span class="control mobileControl">
+          <span class="key">Lift</span>
+          <span class="control-copy">
+            <span class="control-name">Release Shift</span>
+            <span class="control-hint">rebound upward</span>
+          </span>
+        </span>
+        <span class="control mobileControl">
+          <span class="key">Shift up</span>
+          <span class="control-copy">
+            <span class="control-name">Chain</span>
+            <span class="control-hint">drag up to chain rebound</span>
           </span>
         </span>
       </div>
@@ -1438,6 +1512,10 @@
       setVirtualKey(ev.code, false);
     });
 
+    canvas.addEventListener("pointerup", function (ev) {
+      if (activateCompletionPrompt()) ev.preventDefault();
+    });
+
     function installMobileControls() {
       var joystick = document.getElementById("mobileJoystick");
       var joystickKnob = document.getElementById("mobileJoystickKnob");
@@ -1730,6 +1808,17 @@
     function nextLevel() {
       if (isFinalLevel()) return false;
       loadLevel(currentLevelIndex + 1);
+      return true;
+    }
+
+    function activateCompletionPrompt() {
+      if (!player.won) return false;
+      if (isFinalLevel()) {
+        spawnPlayer();
+      } else {
+        nextLevel();
+      }
+      clearEdges();
       return true;
     }
 
@@ -2488,7 +2577,7 @@
       }
 
       if (player.state === "won") {
-        if (keyEdge.Space || keyEdge.Enter) {
+        if ((keyEdge.Space || keyEdge.Enter) && !isFinalLevel()) {
           nextLevel();
         }
         clearEdges();
@@ -3235,7 +3324,7 @@
       } else if (player.state === "stuck") {
         message = "stuck";
       } else if (player.won) {
-        message = isFinalLevel() ? "all rifts stable" : "press Space for next";
+        message = isFinalLevel() ? "all rifts stable" : "tap to continue";
       } else {
         message = (currentLevelIndex + 1) + "/" + LEVELS.length + " " + LEVELS[currentLevelIndex].name;
       }
@@ -3265,7 +3354,7 @@
       ctx.shadowBlur = 0;
       ctx.fillStyle = "#f6f3ff";
       ctx.font = "18px ui-sans-serif, system-ui";
-      ctx.fillText(final ? "Press R for checkpoint" : "Press Space for next rift", CONFIG.VIEW_W / 2, CONFIG.VIEW_H / 2 + 30);
+      ctx.fillText(final ? "Tap to checkpoint" : "Tap to continue", CONFIG.VIEW_W / 2, CONFIG.VIEW_H / 2 + 30);
       ctx.textAlign = "left";
     }
 
@@ -3336,6 +3425,7 @@
       defineLevel: defineLevel,
       loadLevel: loadLevel,
       nextLevel: nextLevel,
+      activateCompletionPrompt: activateCompletionPrompt,
       isFinalLevel: isFinalLevel,
       updateCamera: updateCamera,
       renderOnly: renderOnly,

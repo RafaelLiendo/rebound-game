@@ -169,6 +169,36 @@ function testMobileShiftReleaseAtTopReleasesShiftAndCtrl() {
   assert(g.keyReleased.ControlLeft === true, "top release did not emit Ctrl release");
 }
 
+function testMobileHudCopyExplainsTouchControls() {
+  assert(html.includes("Hold Shift"), "mobile HUD copy does not explain holding Shift");
+  assert(html.includes("Release Shift"), "mobile HUD copy does not explain releasing Shift");
+  assert(html.includes("drag up to chain rebound"), "mobile HUD copy does not explain Shift drag-up chaining");
+  assert(html.includes("Tap to continue"), "completion prompt does not use tap-to-continue copy");
+  assert(html.includes("Tap to checkpoint"), "final completion prompt does not use tap-to-checkpoint copy");
+  assert(!html.includes("Press Space for next rift"), "win prompt still asks mobile players to press Space");
+}
+
+function testTapCompletionPromptAdvancesLevel() {
+  const g = makeGame();
+  completeCurrentLevel(g);
+
+  assert(g.activateCompletionPrompt() === true, "tap completion prompt was not handled");
+  assert(g.currentLevelIndex === 1, "tap completion prompt did not advance to the next level");
+  assert(g.player.won === false, "tap completion prompt left player in won state");
+}
+
+function testTapFinalCompletionPromptRestartsCheckpoint() {
+  const g = makeGame();
+  const finalIndex = g.LEVELS.length - 1;
+  g.loadLevel(finalIndex);
+  completeCurrentLevel(g);
+
+  assert(g.activateCompletionPrompt() === true, "final tap completion prompt was not handled");
+  assert(g.currentLevelIndex === finalIndex, "final tap completion changed the level");
+  assert(g.player.won === false, "final tap completion did not restart from checkpoint");
+  assert(g.activeCheckpoint.order === 0, "final tap completion reset checkpoint progress incorrectly");
+}
+
 function scratchRows(rowCount = 50, colCount = 70) {
   const rows = Array.from({ length: rowCount }, () => Array(colCount).fill("."));
   rows[1][colCount - 2] = "@";
@@ -2750,6 +2780,9 @@ const tests = [
   ["mobile joystick maps move and jump keys", testMobileJoystickMapsMoveAndJumpKeys],
   ["mobile Shift button maps Shift and vertical assist", testMobileShiftButtonMapsShiftAndVerticalAssist],
   ["mobile Shift release at top releases Shift and Ctrl", testMobileShiftReleaseAtTopReleasesShiftAndCtrl],
+  ["mobile HUD copy explains touch controls", testMobileHudCopyExplainsTouchControls],
+  ["tap completion prompt advances level", testTapCompletionPromptAdvancesLevel],
+  ["tap final completion prompt restarts checkpoint", testTapFinalCompletionPromptRestartsCheckpoint],
   ["load level recalculates map", testLoadLevelRecalculatesMap],
   ["authored levels have valid starts", testAuthoredLevelsHaveValidMarkersAndStarts],
   ["playable campaign is redesigned level set", testPlayableCampaignIsRedesignedLevelSet],
