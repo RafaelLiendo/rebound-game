@@ -714,6 +714,12 @@ function findMinimumFallTiles(g, massRows) {
   return high;
 }
 
+function assertPassThroughThreshold(g, massRows) {
+  const target = minimumFallThroughTiles(massRows);
+  assert(!simulatePassThrough(g, massRows, target - 0.25), massRows + "-row mass passed below the 3x entry threshold");
+  assert(simulatePassThrough(g, massRows, target + 0.25), massRows + "-row mass failed above the 3x entry threshold");
+}
+
 function measureFreeFallToTerminal(g) {
   buildMeasurementFixture(g);
   setPlayer(g, cellX(g, 10), -g.CONFIG.PLAYER_H, "solid");
@@ -949,10 +955,10 @@ function testPlayableCampaignIsRedesignedLevelSet() {
 
 const LEVEL_REACH_LIMITS = {
   normalJumpTiles: 2,
-  maxPassThroughRows: 5,
+  maxReboundRows: 5,
+  entryFallPerRow: 3,
   minimumClearanceRows: 2,
-  bottomReboundByRows: [0, 2, 4, 7, 12, 21],
-  minimumFallThroughByRows: [0, 2, 4, 5, 5, 5]
+  bottomReboundByRows: [0, 2, 4, 7, 12, 21]
 };
 
 function tileAt(level, r, c) {
@@ -1060,7 +1066,11 @@ function rangeGapTiles(a, b) {
 }
 
 function bottomReboundLimitTiles(rows) {
-  return LEVEL_REACH_LIMITS.bottomReboundByRows[Math.min(rows, LEVEL_REACH_LIMITS.maxPassThroughRows)];
+  return LEVEL_REACH_LIMITS.bottomReboundByRows[Math.min(rows, LEVEL_REACH_LIMITS.maxReboundRows)];
+}
+
+function minimumFallThroughTiles(rows) {
+  return Math.max(1, rows) * LEVEL_REACH_LIMITS.entryFallPerRow;
 }
 
 function ballisticRisePixelsForTest(g, launchSpeed) {
@@ -1158,18 +1168,6 @@ function movementAnalysis(g, from, to) {
 
     mode = "rebound";
     verticalLimitTiles = bottomReboundLimitTiles(from.h);
-    const fallThroughTiles = LEVEL_REACH_LIMITS.minimumFallThroughByRows[Math.min(from.h, LEVEL_REACH_LIMITS.maxPassThroughRows)];
-    if (from.h > LEVEL_REACH_LIMITS.maxPassThroughRows || fallThroughTiles > LEVEL_REACH_LIMITS.maxPassThroughRows) {
-      return {
-        ok: false,
-        mode,
-        riseTiles,
-        gapTiles,
-        verticalLimitTiles,
-        horizontalLimitTiles,
-        reason: "pass-through cap"
-      };
-    }
     horizontalLimitTiles = horizontalReachTilesForFrames(
       g,
       ascentFramesAtRise(g, launchSpeedForRiseTilesForTest(g, verticalLimitTiles), riseTiles),
@@ -1290,8 +1288,8 @@ function testBuriedPressureLockFiveRowPassThroughGate() {
     return false;
   }
 
-  assert(!passesSealFromFall(4), "Buried Pressure Lock seal can be bypassed without the intended high dive");
-  assert(passesSealFromFall(5.5), "Buried Pressure Lock 5-row seal did not allow a tuned high-dive pass-through");
+  assert(!passesSealFromFall(14.75), "Buried Pressure Lock seal can be bypassed without the intended 3x high dive");
+  assert(passesSealFromFall(15.25), "Buried Pressure Lock 5-row seal did not allow a tuned 3x high-dive pass-through");
 }
 
 function testMoonwellChoirContainsPlayableChainStack() {
@@ -2381,7 +2379,7 @@ function testPlayerLimitMeasurements() {
   const tunedRows = [1, 2, 3, 4, 5];
   const targetCenterRebounds = tunedRows.map((rows) => reboundTargetFromDepthLevelForTest(rows / 2));
   const targetBottomRebounds = tunedRows.map(reboundTargetFromDepthLevelForTest);
-  const targetMinimumFalls = [2, 4, 5, 5, 5];
+  const targetMinimumFalls = tunedRows.map(minimumFallThroughTiles);
   const overCapRows = [6, 8, 12];
   const cappedRebound = reboundTargetFromDepthLevelForTest(5);
   const heightTolerance = 0.05;
@@ -2399,6 +2397,7 @@ function testPlayerLimitMeasurements() {
     bottomRebounds.push(measureReboundPeak(g, rows, "bottom", "release"));
     bottomAssistRebounds.push(measureReboundPeak(g, rows, "bottom", "ctrl+shift"));
     minimumFalls.push(findMinimumFallTiles(g, rows));
+    assertPassThroughThreshold(g, rows);
     chainPeaks.push(oneTileGapChainImpossible(g, rows) ? null : measureChainPeak(g, rows));
   }
 
@@ -2420,10 +2419,12 @@ function testPlayerLimitMeasurements() {
     assertApprox(measureReboundPeak(g, rows, "bottom", "release"), cappedRebound, heightTolerance, "release bottom rebound cap missed for " + rows + " tile mass");
     assertApprox(measureReboundPeak(g, rows, "bottom", "ctrl+shift"), cappedRebound, heightTolerance, "ctrl+shift bottom rebound cap missed for " + rows + " tile mass");
   }
+  assertApprox(findMinimumFallTiles(g, 6), minimumFallThroughTiles(6), heightTolerance, "6-row mass minimum fall-through target missed");
+  assertPassThroughThreshold(g, 6);
 
   assertApprox(normalJump, 2, heightTolerance, "normal jump target missed");
   assertApprox(terminalFall, 5, heightTolerance, "free fall to max-speed target missed");
-  assert(terminalRows === 5, "terminal-speed pass-through target missed; expected 5 rows, got " + terminalRows);
+  assert(terminalRows === 0, "terminal-speed pass-through bypassed the 3x entry budget; expected 0 rows, got " + terminalRows);
   assert(
     normalHorizontalGaps.map((entry) => entry.safeTiles).join(",") === "5,4,3",
     "normal horizontal safe gaps changed; got " + normalHorizontalGaps.map((entry) => entry.safeTiles).join(",")
