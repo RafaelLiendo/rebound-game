@@ -2979,7 +2979,11 @@
         player.embeddedDepth = rebound.depth || (fullOverlap ? mass.pixels : 0);
         player.reboundMeterLevel = rebound.meterLevel || (fullOverlap ? mass.meterLevel : 0);
         if ((autoChainActive || ceilingAssistReady || player.chainLocked) && rebound.fire) {
+          var wasManualChainHeld = player.chainLocked && !genericAutoChainActive && permeateHeld();
           triggerReboundOrStuck(rebound);
+          if (player.state === "rebounding" && wasManualChainHeld) {
+            queueReboundPermeation("manual");
+          }
           if (player.state === "rebounding" && genericAutoChainActive) {
             player.queuedPermeate = true;
             player.queuedPermeateSource = "auto";

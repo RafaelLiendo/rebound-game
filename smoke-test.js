@@ -1703,6 +1703,35 @@ function testManualQueueConsumesOnSurface() {
   assert(surfaced, "player never surfaced during rebound");
 }
 
+function testHeldShiftChainLockedReboundQueuesManualExit() {
+  const g = makeGame();
+  clearMeasurementWorld(g);
+
+  paintTileBlock(g, 21, 19, 3, 3);
+  setPlayer(g, cellX(g, 20), 22 * g.CONFIG.TILE_SIZE, "permeating");
+  g.player.chainLocked = true;
+  press(g, "ShiftLeft");
+
+  step(g);
+  assert(g.player.state === "rebounding", "held Shift chain-lock did not start rebound");
+  assert(g.player.queuedPermeate === true, "held Shift chain-lock did not queue manual permeation");
+  assert(g.player.queuedPermeateSource === "manual", "held Shift chain-lock did not record manual queue source");
+
+  let surfaced = false;
+  for (let i = 0; i < 120; i++) {
+    step(g);
+    if (g.overlappingSolidTiles(g.playerRect()).length === 0) {
+      surfaced = true;
+      assert(g.player.state === "permeating", "held Shift chain-lock became solid at rebound exit");
+      assert(g.player.queuedPermeate === false, "held Shift chain-lock did not consume the manual queue");
+      assert(g.player.reboundAirborneTimer === 0, "held Shift chain-lock preserved auto-chain boost");
+      break;
+    }
+  }
+
+  assert(surfaced, "held Shift chain-lock never surfaced");
+}
+
 function testHeldShiftManualChainPullsThroughCeilingHang() {
   const g = makeGame();
   clearMeasurementWorld(g);
@@ -2946,6 +2975,7 @@ const tests = [
   ["bug 2 tall mass rebounds once", testBugTwoTallMassReboundsOnce],
   ["auto assist climbs tuned thick stack", testAutoAssistClimbsTunedThickStack],
   ["manual queue consumes on surface", testManualQueueConsumesOnSurface],
+  ["held Shift chain-lock queues manual exit", testHeldShiftChainLockedReboundQueuesManualExit],
   ["held Shift manual chain pulls through ceiling hang", testHeldShiftManualChainPullsThroughCeilingHang],
   ["manual tap chain keeps queued permeation", testManualTapChainKeepsQueuedPermeation],
   ["manual rhythm chain completes bug fixture without Ctrl", testManualRhythmChainCompletesFirstLevelWithoutCtrl],
