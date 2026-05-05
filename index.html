@@ -704,6 +704,8 @@
       JUMP_CUT_VELOCITY: -2.8,
       COYOTE_FRAMES: 6,
       JUMP_BUFFER_FRAMES: 6,
+      WALL_CLING_MAX_FALL_SPEED: 1.8,
+      WALL_JUMP_X_VELOCITY: 5,
       REBOUND_HORIZONTAL_MULTIPLIER: 1.5,
       REBOUND_STATE_DURATION: 0.4,
       REBOUND_SURFACE_SPEED: 16,
@@ -2082,6 +2084,7 @@
       state: "solid",
       facing: 1,
       grounded: false,
+      wallClingSide: 0,
       won: false,
       coyoteTimer: 0,
       jumpBufferTimer: 0,
@@ -2115,6 +2118,7 @@
       player.state = "solid";
       player.facing = 1;
       player.grounded = false;
+      player.wallClingSide = 0;
       player.won = false;
       player.coyoteTimer = 0;
       player.jumpBufferTimer = 0;
@@ -2844,12 +2848,38 @@
       return player.grounded;
     }
 
+    function wallContactSide() {
+      if (player.state !== "solid" || player.grounded || collisionMatter(playerRect()).length > 0) return 0;
+      var rect = playerRect();
+      var rightProbe = { x: rect.x + 1, y: rect.y + 2, w: rect.w, h: rect.h - 4 };
+      if (collisionMatter(rightProbe).length > 0) return 1;
+      var leftProbe = { x: rect.x - 1, y: rect.y + 2, w: rect.w, h: rect.h - 4 };
+      if (collisionMatter(leftProbe).length > 0) return -1;
+      return 0;
+    }
+
+    function wallClingSideForInput(moveInput) {
+      var side = wallContactSide();
+      return side !== 0 && moveInput === side ? side : 0;
+    }
+
+    function startWallJump(wallSide) {
+      player.vx = -wallSide * CONFIG.WALL_JUMP_X_VELOCITY;
+      player.vy = CONFIG.JUMP_VELOCITY;
+      player.wallClingSide = 0;
+      player.jumpBufferTimer = 0;
+      player.coyoteTimer = 0;
+      player.grounded = false;
+      spawnRipple(player.x + CONFIG.PLAYER_W / 2, player.y + CONFIG.PLAYER_H / 2, 0.28);
+    }
+
     function placePlayerAtCell(c, r) {
       player.x = c * TS + (TS - CONFIG.PLAYER_W) / 2;
       player.y = (r + 1) * TS - CONFIG.PLAYER_H;
       player.vx = 0;
       player.vy = 0;
       player.state = "solid";
+      player.wallClingSide = 0;
       player.won = false;
       player.permeateUntilClear = false;
       player.reboundAirborneTimer = 0;
@@ -3112,7 +3142,12 @@
 
       var canJump = (player.state === "solid" || (player.state === "rebounding" && player.reboundSurfaced)) &&
         (player.grounded || player.coyoteTimer > 0);
-      if (player.jumpBufferTimer > 0 && canJump) {
+      var wallSide = wallClingSideForInput(moveInput);
+      var canWallJump = player.state === "solid" && wallSide !== 0;
+      if (player.jumpBufferTimer > 0 && canWallJump) {
+        startWallJump(wallSide);
+        skipVerticalForce = true;
+      } else if (player.jumpBufferTimer > 0 && canJump) {
         player.vy = CONFIG.JUMP_VELOCITY;
         player.jumpBufferTimer = 0;
         player.coyoteTimer = 0;
@@ -3180,7 +3215,15 @@
           }
         } else {
           player.vy = Math.min(CONFIG.MAX_FALL_SPEED, player.vy + CONFIG.GRAVITY);
+          if (wallSide !== 0 && player.vy > CONFIG.WALL_CLING_MAX_FALL_SPEED) {
+            player.vy = CONFIG.WALL_CLING_MAX_FALL_SPEED;
+            player.wallClingSide = wallSide;
+          } else {
+            player.wallClingSide = 0;
+          }
         }
+      } else if (player.state !== "solid") {
+        player.wallClingSide = 0;
       }
 
       if (player.reboundAirborneTimer > 0 && player.state !== "rebounding" && player.vy >= 0) {
@@ -3869,6 +3912,8 @@
       reboundMoveBoostActive: reboundMoveBoostActive,
       moveAndCollide: moveAndCollide,
       probeGrounded: probeGrounded,
+      wallContactSide: wallContactSide,
+      wallClingSideForInput: wallClingSideForInput,
       placePlayerAtCell: placePlayerAtCell,
       recoverToCheckpoint: recoverToCheckpoint,
       updateEntities: updateEntities,

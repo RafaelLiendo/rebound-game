@@ -2627,6 +2627,63 @@ function testOpenClawPresentationStatesAreReadable() {
   assert(new Set(labels).size === labels.length, "presentation labels should be distinct across core states");
 }
 
+function buildWallClawFixture(g) {
+  clearMeasurementWorld(g, 36, 36);
+  const wallCol = 14;
+  paintTileBlock(g, 8, wallCol, 20, 1);
+  paintTileBlock(g, 31, 0, 1, 36);
+  return {
+    wallCol,
+    wallX: wallCol * g.CONFIG.TILE_SIZE,
+    clingX: wallCol * g.CONFIG.TILE_SIZE - g.CONFIG.PLAYER_W,
+    startY: 15 * g.CONFIG.TILE_SIZE
+  };
+}
+
+function testWallClawClingsOnlyWhileAirborne() {
+  const g = makeGame();
+  const fixture = buildWallClawFixture(g);
+
+  setPlayer(g, fixture.clingX, fixture.startY, "solid");
+  g.player.vy = 7;
+  press(g, "ArrowRight");
+  step(g);
+
+  assert(g.player.wallClingSide === 1, "airborne wall press did not enter right-wall cling");
+  assert(g.player.vy <= g.CONFIG.WALL_CLING_MAX_FALL_SPEED, "wall cling did not cap fall speed");
+  assert(g.player.state === "solid", "wall cling should stay in solid movement");
+
+  setPlayer(g, fixture.clingX, standY(g, 31), "solid");
+  press(g, "ArrowRight");
+  step(g);
+  assert(g.player.grounded === true, "fixture player did not start grounded");
+  assert(g.player.wallClingSide === 0, "grounded wall press should not become a wall cling");
+}
+
+function testWallClawJumpAndResetSafety() {
+  const g = makeGame();
+  const fixture = buildWallClawFixture(g);
+
+  setPlayer(g, fixture.clingX, fixture.startY, "solid");
+  g.player.vy = 7;
+  press(g, "ArrowRight");
+  step(g);
+  assert(g.player.wallClingSide === 1, "wall jump fixture did not cling");
+
+  press(g, "Space");
+  step(g);
+  assert(g.player.wallClingSide === 0, "wall jump kept cling latched");
+  assert(g.player.vy === g.CONFIG.JUMP_VELOCITY, "wall jump did not use normal jump height");
+  assert(g.player.vx < 0, "right-wall jump did not launch away from the wall");
+  assert(Math.abs(g.player.vx) <= g.CONFIG.MAX_RUN_SPEED, "wall jump exceeded normal horizontal speed limits");
+
+  press(g, "KeyR");
+  step(g);
+  assert(g.player.state === "solid", "reset during Wall Claw did not return to solid");
+  assert(g.player.wallClingSide === 0, "reset did not clear Wall Claw state");
+  assert(g.overlappingSolidTiles(g.playerRect()).length === 0, "reset during Wall Claw spawned inside terrain");
+}
+
 function paintRect(rows, c, r, cols, rowCount, ch) {
   for (let rr = r; rr < r + rowCount; rr++) {
     for (let cc = c; cc < c + cols; cc++) rows[rr][cc] = ch;
@@ -3113,6 +3170,8 @@ const tests = [
   ["HUD pressure bar uses rebound depth meter", testHudPressureBarUsesReboundDepthMeter],
   ["HUD pressure meter has five segments", testHudPressureMeterHasFiveSegments],
   ["Open Claw presentation states are readable", testOpenClawPresentationStatesAreReadable],
+  ["Wall Claw clings only while airborne", testWallClawClingsOnlyWhileAirborne],
+  ["Wall Claw jump and reset safety", testWallClawJumpAndResetSafety],
   ["player limit measurements", testPlayerLimitMeasurements],
   ["entity chars normalize geometry", testEntityCharMarkersNormalizeGeometry],
   ["repeated entity chars create clusters", testRepeatedEntityCharCreatesMultipleClusters],
