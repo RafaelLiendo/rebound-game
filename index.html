@@ -714,7 +714,6 @@
       PERMEATE_PULL_ACCEL: 0.9,
       PERMEATE_BOTTOM_BRAKE_ACCEL: 0.45,
       PERMEATE_MATTER_MAX_SPEED: 12.8,
-      PERMEATE_ENTRY_FALL_PER_ROW: 3,
       STUCK_SEARCH_RADIUS: 6,
       STUCK_DURATION: 0.5,
       PLAYER_W: 24,
@@ -2391,7 +2390,8 @@
     }
 
     function passThroughTargetFallTiles(massRows) {
-      return Math.max(1, massRows || 1) * CONFIG.PERMEATE_ENTRY_FALL_PER_ROW;
+      var rows = Math.max(1, massRows || 1);
+      return rows * 2 + 1;
     }
 
     function permeationEntryWork(mass) {

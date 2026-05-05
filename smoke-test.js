@@ -716,8 +716,8 @@ function findMinimumFallTiles(g, massRows) {
 
 function assertPassThroughThreshold(g, massRows) {
   const target = minimumFallThroughTiles(g, massRows);
-  assert(!simulatePassThrough(g, massRows, target - 0.25), massRows + "-row mass passed below the 3x entry threshold");
-  assert(simulatePassThrough(g, massRows, target + 0.25), massRows + "-row mass failed above the 3x entry threshold");
+  assert(!simulatePassThrough(g, massRows, target - 0.25), massRows + "-row mass passed below the 2x+1 entry threshold");
+  assert(simulatePassThrough(g, massRows, target + 0.25), massRows + "-row mass failed above the 2x+1 entry threshold");
 }
 
 function measureFreeFallToTerminal(g) {
@@ -1070,7 +1070,7 @@ function bottomReboundLimitTiles(rows) {
 
 function minimumFallThroughTiles(g, rows) {
   return g.passThroughTargetFallTiles ? g.passThroughTargetFallTiles(rows) :
-    Math.max(1, rows) * g.CONFIG.PERMEATE_ENTRY_FALL_PER_ROW;
+    Math.max(1, rows) * 2 + 1;
 }
 
 function ballisticRisePixelsForTest(g, launchSpeed) {
@@ -1289,8 +1289,8 @@ function testBuriedPressureLockFiveRowPassThroughGate() {
   }
 
   const requiredFall = minimumFallThroughTiles(g, 5);
-  assert(!passesSealFromFall(requiredFall - 0.25), "Buried Pressure Lock seal can be bypassed without the intended 3x high dive");
-  assert(passesSealFromFall(requiredFall + 0.25), "Buried Pressure Lock 5-row seal did not allow a tuned 3x high-dive pass-through");
+  assert(!passesSealFromFall(requiredFall - 0.25), "Buried Pressure Lock seal can be bypassed without the intended 2x+1 high dive");
+  assert(passesSealFromFall(requiredFall + 0.25), "Buried Pressure Lock 5-row seal did not allow a tuned 2x+1 high-dive pass-through");
 }
 
 function testMoonwellChoirContainsPlayableChainStack() {
@@ -2425,7 +2425,7 @@ function testPlayerLimitMeasurements() {
 
   assertApprox(normalJump, 2, heightTolerance, "normal jump target missed");
   assertApprox(terminalFall, 5, heightTolerance, "free fall to max-speed target missed");
-  assert(terminalRows === 0, "terminal-speed pass-through bypassed the 3x entry budget; expected 0 rows, got " + terminalRows);
+  assert(terminalRows === 0, "terminal-speed pass-through bypassed the entry budget; expected 0 rows, got " + terminalRows);
   assert(
     normalHorizontalGaps.map((entry) => entry.safeTiles).join(",") === "5,4,3",
     "normal horizontal safe gaps changed; got " + normalHorizontalGaps.map((entry) => entry.safeTiles).join(",")

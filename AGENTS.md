@@ -83,11 +83,11 @@ There is no build step. `index.html` can be opened directly in a browser.
   `smoke-test.js`. The reachability smoke test derives terrain matter, standable
   surfaces, mover path extents, and shallow slab-chain matter from the map, then
   checks spawn-to-goal traversal using normal jump height, rebound height by
-  mass depth, pass-through caps, horizontal reach, and two-row player clearance
-  for actual landing shelves. Do not add fake scaffold terrain only to appease
-  the audit; if a route is mechanically valid through chain rebounds, moving
-  matter, or ceiling-hang setup, teach or tune the audit to model that mechanic
-  directly.
+  mass depth, target-based pass-through entry, horizontal reach, and two-row
+  player clearance for actual landing shelves. Do not add fake scaffold terrain
+  only to appease the audit; if a route is mechanically valid through chain
+  rebounds, moving matter, or ceiling-hang setup, teach or tune the audit to
+  model that mechanic directly.
 - If level switching changes, keep `window.gameInternals` useful for tests by
   exposing live getters for active level data, dimensions, and camera position.
 - Mobile landscape play uses touch controls layered over the canvas:
@@ -153,9 +153,10 @@ There is no build step. `index.html` can be opened directly in a browser.
   segments rather than pixel-sized repeating backgrounds, so the displayed
   divisions stay aligned with the five-tile maximum at any HUD scale.
 - Permeation pass-through is also target-based: short falls should be resisted
-  by drag, center pull, and bottom brake, while falls that meet the tuned tile
-  threshold should carry through. Keep max-speed entry through static matter
-  aligned with the player limit measurement tests.
+  by drag, center pull, and bottom brake, while falls that meet the tuned
+  `2 * massRows + 1` tile threshold should carry through. Keep terminal-speed
+  entry without committed pre-entry fall from bypassing this target, aligned
+  with the player limit measurement tests.
 - Top-half-only permeation is intentional ceiling-hang behavior: when the
   player is permeating with only the upper body inside matter, they should hang
   without gravity or center pull unless the player opts in. Keep this modeled
@@ -222,7 +223,7 @@ Add smoke coverage when changing:
   hang
 - player limit tuning, including normal jump height, terminal fall distance,
   rebound target heights, minimum pass-through fall heights, and max-speed
-  pass-through thickness
+  entry not bypassing the pass-through target
 - HUD meter behavior or visual charge scaling, including rebound-depth meter
   levels, five visible segments, ARIA value text, and full/empty fill states
 - mobile controls, HUD copy, touch mappings, gesture suppression, optional PWA
