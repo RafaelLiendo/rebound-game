@@ -2851,20 +2851,22 @@
       player.y = Math.min(player.y, levelH - CONFIG.PLAYER_H);
     }
 
-    function fixedSupportBelowPlayer(rect) {
+    function supportMatterBelow(rect, ignoredEntity) {
       var probe = { x: rect.x, y: rect.y + rect.h, w: rect.w, h: 1 };
-      return overlappingSolidTiles(probe).length > 0;
+      return overlappingMatter(probe).some(function (hit) {
+        return hit.entity !== ignoredEntity;
+      });
     }
 
-    function handleMovingPlatformCrush() {
+    function handleSolidMoverEmbedding() {
       if (player.state !== "solid") return false;
       var rect = playerRect();
-      if (!fixedSupportBelowPlayer(rect)) return false;
       for (var i = 0; i < entities.length; i++) {
         var e = entities[i];
         if (!e.solid || e.type !== "mover" || e.dy <= 0) continue;
         if (e.prevY + e.h > rect.y + 1) continue;
         if (!rectsOverlap(rect, entityRect(e))) continue;
+        if (!supportMatterBelow(rect, e)) continue;
         recoverToCheckpoint();
         return true;
       }
@@ -2937,7 +2939,7 @@
 
       updateEntities(dt);
       carryPlayerOnEntities();
-      if (handleMovingPlatformCrush()) {
+      if (handleSolidMoverEmbedding()) {
         clearEdges();
         return;
       }

@@ -4,7 +4,12 @@ Guidance for AI agents working in this repository.
 
 ## Git Rules
 
-Never commit or stage changes, let the user do it manually. You may check the staged changes to understand what changes, but you may only change the working directory.
+Never commit or stage changes, let the user do it manually. You may check the
+staged changes to understand what changed, but you may only change the working
+directory. Treat the index/staged snapshot as user-owned state: do not run
+commands that mutate it, including `git add`, `git restore --staged`,
+`git reset`, or equivalent staging/unstaging operations, unless the user
+explicitly asks for that exact index change.
 
 ## Project Shape
 
