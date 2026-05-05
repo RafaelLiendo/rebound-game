@@ -361,10 +361,10 @@ const EARLY_CAMPAIGN_LEVEL_NAMES = [
 ];
 
 const LATE_CAMPAIGN_LEVEL_NAMES = [
-  "Momentum Court",
-  "Tideworks Ferries",
-  "Open Claw Chainspire",
-  "Signal Crown Breach"
+  "Skyline Spire",
+  "Outer Hulls",
+  "Fleet Bridges",
+  "Command Vessel"
 ];
 
 const CAMPAIGN_LEVEL_NAMES = EARLY_CAMPAIGN_LEVEL_NAMES.concat(LATE_CAMPAIGN_LEVEL_NAMES);
@@ -1365,9 +1365,9 @@ function findSurfaceNodeAt(level, row, col) {
   return node;
 }
 
-function testMomentumCourtUsesBoostOnlyGaps() {
+function testSkylineSpireUsesBoostOnlyGaps() {
   const g = makeGame();
-  const level = loadCampaignLevel(g, "Momentum Court");
+  const level = loadCampaignLevel(g, "Skyline Spire");
   const moves = [
     { from: findSurfaceNodeAt(level, 42, 20), to: findSurfaceNodeAt(level, 35, 33), rows: 3 },
     { from: findSurfaceNodeAt(level, 31, 46), to: findSurfaceNodeAt(level, 19, 62), rows: 4 },
@@ -1376,22 +1376,22 @@ function testMomentumCourtUsesBoostOnlyGaps() {
 
   for (const entry of moves) {
     const move = movementAnalysis(g, entry.from, entry.to);
-    assert(move.mode === "rebound", "Momentum Court route should require rebound movement");
-    assert(move.ok, "Momentum Court " + entry.rows + "-row rebound move exceeds measured limits");
-    assert(move.gapTiles > LEVEL_REACH_LIMITS.normalJumpTiles, "Momentum Court rebound gap is too small to teach boosted horizontal shaping");
+    assert(move.mode === "rebound", "Skyline Spire route should require rebound movement");
+    assert(move.ok, "Skyline Spire " + entry.rows + "-row rebound move exceeds measured limits");
+    assert(move.gapTiles > LEVEL_REACH_LIMITS.normalJumpTiles, "Skyline Spire rebound gap is too small to teach boosted horizontal shaping");
   }
 }
 
 function testMoverLevelsExposeExpectedRuntimeSurfaces() {
   const g = makeGame();
-  const tideworks = loadCampaignLevel(g, "Tideworks Ferries");
-  assert(tideworks.entities.some((e) => e.type === "mover" && e.role === "platform" && e.w === 5 && e.h === 1), "Tideworks Ferries missing 5x1 platform ferry");
-  assert(tideworks.entities.some((e) => e.type === "mover" && e.role === "rebound" && e.w === 4 && e.h === 3), "Tideworks Ferries missing 4x3 vertical rebound mass");
-  assert(tideworks.entities.some((e) => e.type === "mover" && e.role === "rebound" && e.w === 5 && e.h === 3), "Tideworks Ferries missing 5x3 horizontal rebound ferry");
+  const tideworks = loadCampaignLevel(g, "Outer Hulls");
+  assert(tideworks.entities.some((e) => e.type === "mover" && e.role === "platform" && e.w === 5 && e.h === 1), "Outer Hulls missing 5x1 platform ferry");
+  assert(tideworks.entities.some((e) => e.type === "mover" && e.role === "rebound" && e.w === 4 && e.h === 3), "Outer Hulls missing 4x3 vertical rebound mass");
+  assert(tideworks.entities.some((e) => e.type === "mover" && e.role === "rebound" && e.w === 5 && e.h === 3), "Outer Hulls missing 5x3 horizontal rebound ferry");
 
-  const finale = loadCampaignLevel(g, "Signal Crown Breach");
-  assert(finale.entities.length === 3, "Signal Crown Breach should expose three moving entities");
-  assert(finale.entities.some((e) => e.path === "circle" && e.role === "rebound"), "Signal Crown Breach missing circular rebound mass");
+  const finale = loadCampaignLevel(g, "Command Vessel");
+  assert(finale.entities.length === 3, "Command Vessel should expose three moving entities");
+  assert(finale.entities.some((e) => e.path === "circle" && e.role === "rebound"), "Command Vessel missing circular rebound mass");
 }
 
 function testCameraTracksHorizontallyInWideLevel() {
@@ -2283,9 +2283,9 @@ function testTallStaticMassReboundsFromExit() {
   }
 }
 
-function testMomentumCourtFiveRowReboundUsesCappedTarget() {
+function testSkylineSpireFiveRowReboundUsesCappedTarget() {
   const g = makeGame();
-  loadCampaignLevel(g, "Momentum Court");
+  loadCampaignLevel(g, "Skyline Spire");
 
   const deepMassCol = 77;
   const massBottomRow = 34;
@@ -2293,10 +2293,10 @@ function testMomentumCourtFiveRowReboundUsesCappedTarget() {
   for (const mode of ["release", "ctrl+shift"]) {
     setPlayer(g, cellX(g, deepMassCol), bottomY - g.CONFIG.PLAYER_H, "permeating");
     const target = g.shouldRebound(g.playerRect()).targetRiseTiles;
-    assertApprox(target, 21, 0.001, "Momentum Court five-row mass did not use capped rebound tuning");
+    assertApprox(target, 21, 0.001, "Skyline Spire five-row mass did not use capped rebound tuning");
 
     const measured = measureCurrentReboundPeakFromExit(g, 480, mode);
-    assertApprox(measured.riseTiles, target, 0.05, "Momentum Court five-row " + mode + " rebound did not follow its exit-relative target height");
+    assertApprox(measured.riseTiles, target, 0.05, "Skyline Spire five-row " + mode + " rebound did not follow its exit-relative target height");
   }
 }
 
@@ -3212,7 +3212,7 @@ const tests = [
   ["Buried Tunnels uses five-row pass-through gate", testBuriedPressureLockFiveRowPassThroughGate],
   ["Occupied Streets contains playable chain stack", testMoonwellChoirContainsPlayableChainStack],
   ["Rooftop District contains ceiling-hang route", testHangingArchiveContainsCeilingHangRoute],
-  ["Momentum Court uses boost-only rebound gaps", testMomentumCourtUsesBoostOnlyGaps],
+  ["Skyline Spire uses boost-only rebound gaps", testSkylineSpireUsesBoostOnlyGaps],
   ["mover levels expose expected runtime surfaces", testMoverLevelsExposeExpectedRuntimeSurfaces],
   ["camera tracks horizontally in wide levels", testCameraTracksHorizontallyInWideLevel],
   ["load level rejects uneven rows", testLoadLevelRejectsUnevenRows],
@@ -3240,7 +3240,7 @@ const tests = [
   ["thin mass keeps existing rebound curve", testThinMassKeepsExistingReboundCurve],
   ["deep static mass rewards bottom dive", testDeepStaticMassRewardsBottomDive],
   ["tall static mass rebounds from planned exit", testTallStaticMassReboundsFromExit],
-  ["Momentum Court five-row rebound uses capped target", testMomentumCourtFiveRowReboundUsesCappedTarget],
+  ["Skyline Spire five-row rebound uses capped target", testSkylineSpireFiveRowReboundUsesCappedTarget],
   ["permeation bottom brake resists deep sinking", testPermeationBottomBrakeResistsDeepSinking],
   ["short fall does not accidentally permeate through thin mass", testShortFallDoesNotAccidentallyPermeateThroughThinMass],
   ["high fall can permeate through thin mass", testHighFallCanPermeateThroughThinMass],
