@@ -2648,6 +2648,15 @@
       if (source === "manual") player.chainLocked = true;
     }
 
+    function queueHeldReboundPermeation(autoChainActive) {
+      if (autoChainActive) {
+        queueReboundPermeation("auto");
+        clearChainLock();
+      } else if (player.chainLocked && permeateHeld()) {
+        queueReboundPermeation("manual");
+      }
+    }
+
     function enterChainPermeation() {
       player.state = "permeating";
       player.permeateUntilClear = false;
@@ -2961,10 +2970,7 @@
         if (permeatePressed()) {
           queueReboundPermeation("manual");
         }
-        if (autoChainActive) {
-          queueReboundPermeation("auto");
-          clearChainLock();
-        }
+        queueHeldReboundPermeation(autoChainActive);
         if (player.queuedPermeateSource === "auto" && (!permeateHeld() || !assistHeld())) {
           player.queuedPermeate = false;
           player.queuedPermeateSource = null;
@@ -2979,15 +2985,8 @@
         player.embeddedDepth = rebound.depth || (fullOverlap ? mass.pixels : 0);
         player.reboundMeterLevel = rebound.meterLevel || (fullOverlap ? mass.meterLevel : 0);
         if ((autoChainActive || ceilingAssistReady || player.chainLocked) && rebound.fire) {
-          var wasManualChainHeld = player.chainLocked && !genericAutoChainActive && permeateHeld();
           triggerReboundOrStuck(rebound);
-          if (player.state === "rebounding" && wasManualChainHeld) {
-            queueReboundPermeation("manual");
-          }
-          if (player.state === "rebounding" && genericAutoChainActive) {
-            player.queuedPermeate = true;
-            player.queuedPermeateSource = "auto";
-          }
+          if (player.state === "rebounding") queueHeldReboundPermeation(genericAutoChainActive);
           skipVerticalForce = true;
         } else if (permeateReleased() && !player.permeateUntilClear) {
           if (rebound.fire) {
@@ -3127,10 +3126,7 @@
         var assistedRebound = shouldRebound(playerRect());
         if (assistedRebound.fire) {
           triggerReboundOrStuck(assistedRebound);
-          if (player.state === "rebounding" && genericAutoChainActive) {
-            player.queuedPermeate = true;
-            player.queuedPermeateSource = "auto";
-          }
+          if (player.state === "rebounding") queueHeldReboundPermeation(genericAutoChainActive);
         }
       }
 
