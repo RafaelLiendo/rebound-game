@@ -975,6 +975,7 @@ function testCampaignLevelMetadataIsExposed() {
 
 const LEVEL_REACH_LIMITS = {
   normalJumpTiles: 2,
+  wallClawRiseTiles: 3,
   maxReboundRows: 5,
   minimumClearanceRows: 2,
   bottomReboundByRows: [0, 2, 4, 7, 12, 21]
@@ -1166,6 +1167,28 @@ function slabChainAnalysis(g, from, to, riseTiles, gapTiles) {
   };
 }
 
+function wallClawAnalysis(g, from, to) {
+  const riseTiles = from.r - to.r;
+  const gapTiles = rangeGapTiles(from, to);
+  const ok = wallClawAuditCandidate(riseTiles, gapTiles, to);
+  return {
+    ok,
+    mode: "wall-claw",
+    riseTiles,
+    gapTiles,
+    verticalLimitTiles: LEVEL_REACH_LIMITS.wallClawRiseTiles,
+    horizontalLimitTiles: 1,
+    reason: ok ? "wall-claw" : "over-limit"
+  };
+}
+
+function wallClawAuditCandidate(riseTiles, gapTiles, to) {
+  return riseTiles > LEVEL_REACH_LIMITS.normalJumpTiles &&
+    riseTiles <= LEVEL_REACH_LIMITS.wallClawRiseTiles &&
+    gapTiles <= 1 &&
+    to.standable;
+}
+
 function movementAnalysis(g, from, to) {
   const riseTiles = from.r - to.r;
   const gapTiles = rangeGapTiles(from, to);
@@ -1185,6 +1208,8 @@ function movementAnalysis(g, from, to) {
   } else {
     const chain = slabChainAnalysis(g, from, to, riseTiles, gapTiles);
     if (chain) return chain;
+    const wallClaw = wallClawAnalysis(g, from, to);
+    if (wallClaw.ok) return wallClaw;
 
     mode = "rebound";
     verticalLimitTiles = bottomReboundLimitTiles(from.h);
@@ -2763,6 +2788,27 @@ function testScannerRecoveryPreservesCheckpointAndControls() {
   assert(g.keys.ArrowRight === false && g.keyReleased.ArrowRight === true, "mobile virtual controls stopped responding after scanner recovery");
 }
 
+function testReachAuditModelsWallClawAndScannerFields() {
+  const g = makeGame();
+  const level = g.defineLevel({
+    name: "Reach Scanner Fixture",
+    map: fixtureRows(50, [
+      { char: "L", c: 12, r: 32, cols: 5, rows: 4 }
+    ]),
+    entities: [
+      { kind: "scanner", name: "audit searchlight", char: "L" }
+    ]
+  });
+  const nodes = surfaceNodesForLevel(level);
+  assert(!nodes.some((node) => node.type === "scanner" || node.name === "audit searchlight"), "reach audit treated scanner light as standable matter");
+
+  const from = { r: 30, c: 10, w: 1, h: 1, standable: true, minC: 10, maxC: 11 };
+  const closeTop = { r: 27, c: 10, w: 1, h: 1, standable: true, minC: 10, maxC: 11 };
+  const tooHigh = { r: 26, c: 10, w: 1, h: 1, standable: true, minC: 10, maxC: 11 };
+  assert(wallClawAnalysis(g, from, closeTop).ok, "reach audit did not model bounded Wall Claw climb");
+  assert(!wallClawAnalysis(g, from, tooHigh).ok, "reach audit allowed over-limit Wall Claw climb");
+}
+
 function paintRect(rows, c, r, cols, rowCount, ch) {
   for (let rr = r; rr < r + rowCount; rr++) {
     for (let cc = c; cc < c + cols; cc++) rows[rr][cc] = ch;
@@ -3254,6 +3300,7 @@ const tests = [
   ["scanner fields are authored and nonsolid", testScannerFieldsAreAuthoredAndNonsolid],
   ["scanner recovers exposed but not hidden permeation", testScannerRecoversExposedButNotHiddenPermeation],
   ["scanner recovery preserves checkpoint and controls", testScannerRecoveryPreservesCheckpointAndControls],
+  ["reach audit models Wall Claw and scanner fields", testReachAuditModelsWallClawAndScannerFields],
   ["player limit measurements", testPlayerLimitMeasurements],
   ["entity chars normalize geometry", testEntityCharMarkersNormalizeGeometry],
   ["repeated entity chars create clusters", testRepeatedEntityCharCreatesMultipleClusters],
