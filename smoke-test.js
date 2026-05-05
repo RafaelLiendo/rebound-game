@@ -2787,6 +2787,64 @@ function testSolidPlayerRidesMovingPlatform() {
   }
 }
 
+function testMovingPlatformCrushesSolidPlayerAgainstFixedFloor() {
+  const g = makeGame();
+  const originalLength = g.LEVELS.length;
+
+  try {
+    const rows = fixtureRows(50, [
+      { char: "A", c: 12, r: 29, cols: 4, rows: 1 }
+    ], [
+      { order: 1, c: 4, r: 33 }
+    ]).map((row) => row.split(""));
+    for (let c = 0; c < rows[34].length; c++) rows[34][c] = "#";
+
+    const index = g.LEVELS.length;
+    g.LEVELS.push(g.defineLevel({
+      name: "Moving Platform Crush Fixture",
+      map: rows.map((row) => row.join("")),
+      entities: [{
+        kind: "mover",
+        name: "descending crusher",
+        char: "A",
+        role: "platform",
+        motion: { kind: "vertical", amplitude: { x: 0, y: 96 }, speed: 1.6, phase: Math.PI }
+      }]
+    }));
+    g.loadLevel(index);
+
+    setPlayer(g, cellX(g, 4), standY(g, 34), "solid");
+    step(g);
+    assert(g.activeCheckpoint.order === 1, "checkpoint 1 was not activated before crush");
+
+    const e = g.entities[0];
+    setPlayer(g, e.x + 32, standY(g, 34), "solid");
+    const crushY = g.player.y;
+    let recovered = false;
+    let liftedToMoverTop = false;
+
+    for (let i = 0; i < 260; i++) {
+      step(g);
+      if (g.player.flashTimer > 0) {
+        recovered = true;
+        break;
+      }
+      if (g.player.y < crushY - 8 && Math.abs(g.player.y + g.CONFIG.PLAYER_H - e.y) < 0.001) {
+        liftedToMoverTop = true;
+        break;
+      }
+    }
+
+    assert(!liftedToMoverTop, "descending mover lifted solid player onto its top instead of crushing");
+    assert(recovered, "descending mover did not recover crushed player");
+    assertNear(g.player.x, cellX(g, 4), "crush recovery did not restore active checkpoint x");
+    assertNear(g.player.y, standY(g, 34), "crush recovery did not restore active checkpoint y");
+  } finally {
+    g.LEVELS.length = originalLength;
+    g.loadLevel(0);
+  }
+}
+
 function testDynamicSolidCanTriggerRebound() {
   const g = makeGame();
   const originalLength = g.LEVELS.length;
@@ -3009,6 +3067,7 @@ const tests = [
   ["largest checkpoint reached stays active", testLargestCheckpointReachedStaysActive],
   ["moving entity steps deterministically", testMovingEntityStepsDeterministically],
   ["solid player rides moving platform", testSolidPlayerRidesMovingPlatform],
+  ["moving platform crushes solid player against fixed floor", testMovingPlatformCrushesSolidPlayerAgainstFixedFloor],
   ["dynamic solid can trigger rebound", testDynamicSolidCanTriggerRebound],
   ["deep dynamic mass rewards bottom dive", testDeepDynamicMassRewardsBottomDive],
   ["moving rebound mass uses live exit", testMovingReboundMassUsesLiveExit],
