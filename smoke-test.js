@@ -2588,6 +2588,45 @@ function testHudPressureMeterHasFiveSegments() {
   assert(segmentCount === 5, "HUD pressure meter expected 5 segments, got " + segmentCount);
 }
 
+function testOpenClawPresentationStatesAreReadable() {
+  const g = makeGame();
+  const labels = [];
+
+  function capture(expectedKey, label, maxMessageLength) {
+    const state = g.presentationState();
+    assert(state.key === expectedKey, "presentation state expected " + expectedKey + ", got " + state.key);
+    assert(state.label === label, expectedKey + " label was not readable");
+    assert(state.message.length <= maxMessageLength, expectedKey + " message is too long for the HUD");
+    assert(typeof state.tone === "string" && state.tone.length > 0, expectedKey + " tone hook is missing");
+    labels.push(state.label);
+  }
+
+  setPlayer(g, g.player.x, g.player.y, "solid");
+  capture("solid", "Open Claw", 34);
+
+  setPlayer(g, g.player.x, g.player.y, "permeating");
+  capture("permeating", "Shadow Sink", 26);
+
+  buildCeilingHangFixture(g);
+  capture("ceiling-hang", "Ceiling Cling", 26);
+
+  setPlayer(g, g.player.x, g.player.y, "rebounding");
+  g.player.reboundMeterLevel = 3;
+  capture("rebounding", "Rebound", 26);
+
+  setPlayer(g, g.player.x, g.player.y, "stuck");
+  capture("stuck", "Snared", 26);
+
+  g.recoverToCheckpoint();
+  capture("checkpoint-recovery", "Recovered", 26);
+
+  setPlayer(g, g.goalRect.x, g.goalRect.y, "solid");
+  g.player.won = true;
+  capture("won", "Unseen", 26);
+
+  assert(new Set(labels).size === labels.length, "presentation labels should be distinct across core states");
+}
+
 function paintRect(rows, c, r, cols, rowCount, ch) {
   for (let rr = r; rr < r + rowCount; rr++) {
     for (let cc = c; cc < c + cols; cc++) rows[rr][cc] = ch;
@@ -3073,6 +3112,7 @@ const tests = [
   ["rebound depth meter levels", testReboundDepthMeterLevels],
   ["HUD pressure bar uses rebound depth meter", testHudPressureBarUsesReboundDepthMeter],
   ["HUD pressure meter has five segments", testHudPressureMeterHasFiveSegments],
+  ["Open Claw presentation states are readable", testOpenClawPresentationStatesAreReadable],
   ["player limit measurements", testPlayerLimitMeasurements],
   ["entity chars normalize geometry", testEntityCharMarkersNormalizeGeometry],
   ["repeated entity chars create clusters", testRepeatedEntityCharCreatesMultipleClusters],

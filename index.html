@@ -2102,7 +2102,8 @@
       reboundEntity: null,
       reboundIgnoreEntity: null,
       stuckTimer: 0,
-      flashTimer: 0
+      flashTimer: 0,
+      recoveryCue: null
     };
 
     function spawnPlayer() {
@@ -2135,6 +2136,7 @@
       player.reboundIgnoreEntity = null;
       player.stuckTimer = 0;
       player.flashTimer = 0;
+      player.recoveryCue = null;
       particles.length = 0;
       ripples.length = 0;
       shake = 0;
@@ -2869,6 +2871,7 @@
     function recoverToCheckpoint() {
       spawnPlayer();
       player.flashTimer = 0.35;
+      player.recoveryCue = "checkpoint";
       shake = 10;
       spawnRipple(player.x + CONFIG.PLAYER_W / 2, player.y + CONFIG.PLAYER_H / 2, 0.55);
     }
@@ -2964,6 +2967,7 @@
       player.coyoteTimer = Math.max(0, player.coyoteTimer - 1);
       player.jumpBufferTimer = Math.max(0, player.jumpBufferTimer - 1);
       player.flashTimer = Math.max(0, player.flashTimer - dt);
+      if (player.flashTimer <= 0) player.recoveryCue = null;
       updateEffects(dt);
 
       if (keyEdge.KeyR) {
@@ -3696,35 +3700,43 @@
       ctx.restore();
     }
 
+    function presentation(key, label, message, tone) {
+      return { key: key, label: label, message: message, tone: tone };
+    }
+
+    function presentationState() {
+      var levelTitle = (currentLevelIndex + 1) + "/" + LEVELS.length + " " + LEVELS[currentLevelIndex].name;
+      if (player.won) {
+        return presentation("won", "Unseen", isFinalLevel() ? "mission quiet" : "tap to continue", "#d8b4ff");
+      }
+      if (player.recoveryCue === "checkpoint" && player.flashTimer > 0) {
+        return presentation("checkpoint-recovery", "Recovered", "checkpoint " + (activeCheckpoint ? activeCheckpoint.order : 0), "#ffd166");
+      }
+      if (player.state === "stuck") {
+        return presentation("stuck", "Snared", "blocked exit", "#ff5cf4");
+      }
+      if (player.state === "rebounding") {
+        return presentation("rebounding", "Rebound", player.reboundMeterLevel >= 2.5 ? "deep launch" : "silent launch", "#ff5cf4");
+      }
+      if (player.state === "permeating" && ceilingHangInfo(playerRect()).active) {
+        return presentation("ceiling-hang", "Ceiling Cling", "hold or pull", "#ffd166");
+      }
+      if (player.state === "permeating") {
+        return presentation("permeating", "Shadow Sink", player.permeateUntilClear ? "phasing through" : "release to rebound", "#4be7ff");
+      }
+      return presentation("solid", "Open Claw", levelTitle, "#8be9ff");
+    }
+
     function drawHud() {
-      var stateText = player.won ? "Won" : player.state.charAt(0).toUpperCase() + player.state.slice(1);
-      var stateColor = {
-        solid: "#8be9ff",
-        permeating: "#4be7ff",
-        rebounding: "#ff5cf4",
-        stuck: "#ff5cf4",
-        won: "#d8b4ff"
-      }[player.won ? "won" : player.state];
+      var presentation = presentationState();
       var meterLevel = clamp(player.reboundMeterLevel || 0, 0, CONFIG.REBOUND_TUNED_MAX_ROWS);
       var charge = meterLevel / CONFIG.REBOUND_TUNED_MAX_ROWS;
-      var message = "solid state";
-      if (player.state === "permeating") {
-        message = player.permeateUntilClear ? "phasing through" : "release to rebound";
-      } else if (player.state === "rebounding") {
-        message = player.reboundMeterLevel >= 2.5 ? "deep rebound!" : "up, up and away!";
-      } else if (player.state === "stuck") {
-        message = "stuck";
-      } else if (player.won) {
-        message = isFinalLevel() ? "all rifts stable" : "tap to continue";
-      } else {
-        message = (currentLevelIndex + 1) + "/" + LEVELS.length + " " + LEVELS[currentLevelIndex].name;
-      }
 
       if (stateLabel) {
-        stateLabel.textContent = stateText;
-        if (stateLabel.style) stateLabel.style.background = stateColor;
+        stateLabel.textContent = presentation.label;
+        if (stateLabel.style) stateLabel.style.background = presentation.tone;
       }
-      if (messageLabel) messageLabel.textContent = message;
+      if (messageLabel) messageLabel.textContent = presentation.message;
       if (pressureMeter) {
         pressureMeter.setAttribute("aria-valuenow", meterLevel.toFixed(1));
         pressureMeter.setAttribute("aria-valuetext", meterLevel.toFixed(1) + "/5");
@@ -3831,6 +3843,7 @@
       isFinalLevel: isFinalLevel,
       updateCamera: updateCamera,
       renderOnly: renderOnly,
+      presentationState: presentationState,
       spawnPlayer: spawnPlayer,
       step: step,
       clearEdges: clearEdges,
