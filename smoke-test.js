@@ -353,16 +353,21 @@ function ensureScratchWorld(g, rowCount = 50, colCount = 70) {
   g.loadLevel(index);
 }
 
-const CAMPAIGN_LEVEL_NAMES = [
-  "Shadow Sink Threshold",
-  "Buried Pressure Lock",
-  "Moonwell Choir",
-  "Hanging Archive",
+const EARLY_CAMPAIGN_LEVEL_NAMES = [
+  "Hidden Base",
+  "Buried Tunnels",
+  "Occupied Streets",
+  "Rooftop District"
+];
+
+const LATE_CAMPAIGN_LEVEL_NAMES = [
   "Momentum Court",
   "Tideworks Ferries",
   "Open Claw Chainspire",
   "Signal Crown Breach"
 ];
+
+const CAMPAIGN_LEVEL_NAMES = EARLY_CAMPAIGN_LEVEL_NAMES.concat(LATE_CAMPAIGN_LEVEL_NAMES);
 
 function campaignLevelIndex(g, name) {
   const index = g.LEVELS.findIndex((level) => level.name === name);
@@ -1284,7 +1289,7 @@ function testAuthoredLevelsAreReachableWithinPlayerLimits() {
 
 function testBuriedPressureLockFiveRowPassThroughGate() {
   const g = makeGame();
-  loadCampaignLevel(g, "Buried Pressure Lock");
+  loadCampaignLevel(g, "Buried Tunnels");
 
   function passesSealFromFall(fallTiles) {
     const sealTopRow = 10;
@@ -1304,22 +1309,22 @@ function testBuriedPressureLockFiveRowPassThroughGate() {
   }
 
   const requiredFall = minimumFallThroughTiles(g, 5);
-  assert(!passesSealFromFall(requiredFall - 0.25), "Buried Pressure Lock seal can be bypassed without the intended 2x+1 high dive");
-  assert(passesSealFromFall(requiredFall + 0.25), "Buried Pressure Lock 5-row seal did not allow a tuned 2x+1 high-dive pass-through");
+  assert(!passesSealFromFall(requiredFall - 0.25), "Buried Tunnels seal can be bypassed without the intended 2x+1 high dive");
+  assert(passesSealFromFall(requiredFall + 0.25), "Buried Tunnels 5-row seal did not allow a tuned 2x+1 high-dive pass-through");
 }
 
 function testMoonwellChoirContainsPlayableChainStack() {
   const g = makeGame();
-  const level = loadCampaignLevel(g, "Moonwell Choir");
+  const level = loadCampaignLevel(g, "Occupied Streets");
   const chainRows = [53, 51, 49, 46];
   for (const row of chainRows) {
     for (let c = 14; c <= 16; c++) {
-      assert(tileAt(level, row, c) === "#", "Moonwell Choir missing chain slab at row " + row);
+      assert(tileAt(level, row, c) === "#", "Occupied Streets missing chain slab at row " + row);
     }
   }
-  assert(chainRows[0] - chainRows[1] - 1 === 1, "Moonwell Choir first chain gap should be 1 row");
-  assert(chainRows[1] - chainRows[2] - 1 === 1, "Moonwell Choir second chain gap should be 1 row");
-  assert(chainRows[2] - chainRows[3] - 1 === 2, "Moonwell Choir speed-check chain gap should be 2 rows");
+  assert(chainRows[0] - chainRows[1] - 1 === 1, "Occupied Streets first chain gap should be 1 row");
+  assert(chainRows[1] - chainRows[2] - 1 === 1, "Occupied Streets second chain gap should be 1 row");
+  assert(chainRows[2] - chainRows[3] - 1 === 2, "Occupied Streets speed-check chain gap should be 2 rows");
 
   setPlayer(g, cellX(g, 15), standY(g, 56), "solid");
   press(g, "ShiftLeft");
@@ -1334,20 +1339,20 @@ function testMoonwellChoirContainsPlayableChainStack() {
   }
 
   for (const row of chainRows.slice(0, 3)) {
-    assert(touchedRows.has(row), "Moonwell Choir auto-chain skipped slab row " + row);
+    assert(touchedRows.has(row), "Occupied Streets auto-chain skipped slab row " + row);
   }
 }
 
 function testHangingArchiveContainsCeilingHangRoute() {
   const g = makeGame();
-  const level = loadCampaignLevel(g, "Hanging Archive");
+  const level = loadCampaignLevel(g, "Rooftop District");
   for (let c = 32; c <= 38; c++) {
-    assert(tileAt(level, 29, c) === "#", "Hanging Archive missing 2-row ceiling at c" + c);
-    assert(tileAt(level, 32, c) === "#", "Hanging Archive missing floor below 2-row ceiling at c" + c);
+    assert(tileAt(level, 29, c) === "#", "Rooftop District missing 2-row ceiling at c" + c);
+    assert(tileAt(level, 32, c) === "#", "Rooftop District missing floor below 2-row ceiling at c" + c);
   }
   for (let c = 56; c <= 62; c++) {
-    assert(tileAt(level, 21, c) === "#", "Hanging Archive missing 3-row ceiling at c" + c);
-    assert(tileAt(level, 25, c) === "#", "Hanging Archive missing floor below 3-row ceiling at c" + c);
+    assert(tileAt(level, 21, c) === "#", "Rooftop District missing 3-row ceiling at c" + c);
+    assert(tileAt(level, 25, c) === "#", "Rooftop District missing floor below 3-row ceiling at c" + c);
   }
   assert(measureCeilingHangGap(g, 2).reachable === true, "2-row ceiling hang gap should remain reachable");
   assert(measureCeilingHangGap(g, 3).reachable === true, "3-row ceiling hang gap should remain reachable");
@@ -3204,9 +3209,9 @@ const tests = [
   ["playable campaign is redesigned level set", testPlayableCampaignIsRedesignedLevelSet],
   ["campaign level metadata is exposed", testCampaignLevelMetadataIsExposed],
   ["authored levels are reachable within player limits", testAuthoredLevelsAreReachableWithinPlayerLimits],
-  ["Buried Pressure Lock uses five-row pass-through gate", testBuriedPressureLockFiveRowPassThroughGate],
-  ["Moonwell Choir contains playable chain stack", testMoonwellChoirContainsPlayableChainStack],
-  ["Hanging Archive contains ceiling-hang route", testHangingArchiveContainsCeilingHangRoute],
+  ["Buried Tunnels uses five-row pass-through gate", testBuriedPressureLockFiveRowPassThroughGate],
+  ["Occupied Streets contains playable chain stack", testMoonwellChoirContainsPlayableChainStack],
+  ["Rooftop District contains ceiling-hang route", testHangingArchiveContainsCeilingHangRoute],
   ["Momentum Court uses boost-only rebound gaps", testMomentumCourtUsesBoostOnlyGaps],
   ["mover levels expose expected runtime surfaces", testMoverLevelsExposeExpectedRuntimeSurfaces],
   ["camera tracks horizontally in wide levels", testCameraTracksHorizontallyInWideLevel],
