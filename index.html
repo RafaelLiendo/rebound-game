@@ -2394,21 +2394,20 @@
       return Math.max(1, massRows || 1) * CONFIG.PERMEATE_ENTRY_FALL_PER_ROW;
     }
 
-    function fallBeforeMatterTiles(mass) {
-      if (!mass || player.permeateStartFeetY === null) return 0;
-      return Math.max(0, (mass.topY - player.permeateStartFeetY) / TS);
-    }
-
-    function passThroughEntryRatio(mass) {
-      var targetFallTiles = passThroughTargetFallTiles(mass && mass.massRows);
-      if (targetFallTiles <= 0) return 1;
-      return fallBeforeMatterTiles(mass) / targetFallTiles;
-    }
-
-    function passThroughResistance(mass) {
-      var ratio = passThroughEntryRatio(mass);
-      if (ratio >= 1) return 0;
-      return 1 - smoothstep(0.82, 1, ratio) * 0.35;
+    function permeationEntryWork(mass) {
+      var requiredFallTiles = passThroughTargetFallTiles(mass && mass.massRows);
+      var fallTiles = !mass || player.permeateStartFeetY === null ? 0 :
+        Math.max(0, (mass.topY - player.permeateStartFeetY) / TS);
+      var ratio = requiredFallTiles <= 0 ? 1 : fallTiles / requiredFallTiles;
+      var committed = ratio >= 1;
+      var charge = committed ? 1 : smoothstep(0.82, 1, ratio);
+      return {
+        requiredFallTiles: requiredFallTiles,
+        fallTiles: fallTiles,
+        ratio: ratio,
+        committed: committed,
+        resistance: committed ? 0 : 1 - charge * 0.35
+      };
     }
 
     function permeationBottomBrake(mass, rect) {
@@ -2556,7 +2555,7 @@
 
     function isPassThroughDive(mass) {
       if (!mass) return false;
-      return passThroughEntryRatio(mass) >= 1;
+      return permeationEntryWork(mass).committed;
     }
 
     function embeddedDepthInfo(rect) {
@@ -3067,7 +3066,7 @@
               if (!isPassThroughDive(hangMass)) player.vy = 0;
             } else {
               var pullMass = activeHang.active && activeHang.mass ? activeHang.mass : matterMassInfo(playerRect());
-              var resistance = passThroughResistance(pullMass);
+              var resistance = permeationEntryWork(pullMass).resistance;
               player.vy *= (1 - CONFIG.PERMEATE_DRAG * resistance);
               if (pullMass.centerY !== null) {
                 var center = player.y + CONFIG.PLAYER_H / 2;
@@ -3768,7 +3767,7 @@
       bottomHalfFullyInsideMatter: bottomHalfFullyInsideMatter,
       ceilingHangInfo: ceilingHangInfo,
       passThroughTargetFallTiles: passThroughTargetFallTiles,
-      passThroughEntryRatio: passThroughEntryRatio,
+      permeationEntryWork: permeationEntryWork,
       contiguousMassExtents: contiguousMassExtents,
       matterMassInfo: matterMassInfo,
       shouldRebound: shouldRebound,
