@@ -1048,10 +1048,36 @@
       return { entities: entities, checkpoints: checkpoints, spawn: spawn, goal: goal };
     }
 
+    function normalizeLevelMetadata(def) {
+      var reachability = def.reachability || {};
+      return {
+        loreBeat: def.loreBeat || "",
+        mechanicBeat: def.mechanicBeat || "",
+        reachability: {
+          expected: reachability.expected || ""
+        }
+      };
+    }
+
+    function levelMetadata(level) {
+      return {
+        name: level.name,
+        loreBeat: level.loreBeat,
+        mechanicBeat: level.mechanicBeat,
+        reachability: {
+          expected: level.reachability ? level.reachability.expected : ""
+        }
+      };
+    }
+
     function defineLevel(def) {
       var markers = normalizeLevelAuthoring(def);
+      var metadata = normalizeLevelMetadata(def);
       return {
         name: def.name,
+        loreBeat: metadata.loreBeat,
+        mechanicBeat: metadata.mechanicBeat,
+        reachability: metadata.reachability,
         map: def.map.slice(),
         entities: markers.entities,
         checkpoints: markers.checkpoints,
@@ -1063,6 +1089,9 @@
     var LEVELS = [
       defineLevel({
         name: "Shadow Sink Threshold",
+        loreBeat: "The Next Shadow first feels the Open Claw answer inside the hidden base.",
+        mechanicBeat: "Thin-surface shadow sink and first checkpoint-safe recovery.",
+        reachability: { expected: "Normal jumps plus thin-floor permeation introduce the route." },
         map: [
           "........................................................................",
           "........................................................................",
@@ -1110,6 +1139,9 @@
       }),      
       defineLevel({
         name: "Buried Pressure Lock",
+        loreBeat: "Old tunnels beneath the city teach that shadowed stone can be a door.",
+        mechanicBeat: "Committed pass-through dive through a five-row pressure seal.",
+        reachability: { expected: "A high fall must satisfy the 2x+1 pass-through entry target." },
         map: [
           "....................................................................................",
           "....................................................................................",
@@ -1161,6 +1193,9 @@
       }),
       defineLevel({
         name: "Moonwell Choir",
+        loreBeat: "The trial chambers turn vertical, asking the candidate to trust rhythm.",
+        mechanicBeat: "Manual and assisted shallow rebound chain timing.",
+        reachability: { expected: "Stacked one- and two-row gaps are chain-rebound reachable." },
         map: [
           "............................................................................",
           "............................................................................",
@@ -1224,6 +1259,9 @@
       }),
       defineLevel({
         name: "Hanging Archive",
+        loreBeat: "Moonlit archives reveal that patience can hold a Shadow Cat in the ceiling.",
+        mechanicBeat: "Top-half ceiling hang, Space pull, and assisted delayed rebound.",
+        reachability: { expected: "Two- and three-row hang gaps stay within measured jump reach." },
         map: [
           "........................................................................................",
           "........................................................................................",
@@ -1273,6 +1311,9 @@
       }),
       defineLevel({
         name: "Momentum Court",
+        loreBeat: "The Open Claw turns depth into height before the city ascent.",
+        mechanicBeat: "Five-row capped rebound and boosted horizontal shaping.",
+        reachability: { expected: "Rebound gaps stay within the five-row boosted reach table." },
         map: [
           "................................................................................................",
           "................................................................................................",
@@ -1326,6 +1367,9 @@
       }),
       defineLevel({
         name: "Tideworks Ferries",
+        loreBeat: "Moving under the occupied streets demands trust in shifting matter.",
+        mechanicBeat: "Moving platforms, dynamic rebound masses, and checkpoint pacing.",
+        reachability: { expected: "Mover surfaces bridge safe gaps without fake scaffold terrain." },
         map: [
           "................................................................................................",
           "................................................................................................",
@@ -1400,6 +1444,9 @@
       }),
       defineLevel({
         name: "Open Claw Chainspire",
+        loreBeat: "The rooftop route points toward the ships and demands silent vertical flow.",
+        mechanicBeat: "Chain rebound through exposed skyline gaps.",
+        reachability: { expected: "The route uses authored chain slabs and a moving mass within audit limits." },
         map: [
           "..................................................................................",
           "..................................................................................",
@@ -1478,6 +1525,9 @@
       }),
       defineLevel({
         name: "Signal Crown Breach",
+        loreBeat: "The Next Shadow enters the command vessel to sever the Signal Crown unseen.",
+        mechanicBeat: "Final remix of rebound, moving matter, hazards, and silent passage.",
+        reachability: { expected: "All final gaps are reachable by measured rebound, mover, and checkpoint rules." },
         map: [
           "................................................................................................................",
           "................................................................................................................",
@@ -3754,6 +3804,9 @@
       get checkpoints() { return checkpoints; },
       get activeCheckpoint() { return activeCheckpoint; },
       get levelTime() { return levelTime; },
+      get activeLevelMetadata() {
+        return levelMetadata(LEVELS[currentLevelIndex]);
+      },
       player: player,
       keys: keys,
       keyEdge: keyEdge,
@@ -3764,6 +3817,7 @@
       get goalRect() { return goalRect; },
       parseLevel: parseLevel,
       defineLevel: defineLevel,
+      levelMetadata: levelMetadata,
       loadLevel: loadLevel,
       nextLevel: nextLevel,
       activateCompletionPrompt: activateCompletionPrompt,

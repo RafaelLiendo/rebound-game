@@ -953,6 +953,21 @@ function testPlayableCampaignIsRedesignedLevelSet() {
   }
 }
 
+function testCampaignLevelMetadataIsExposed() {
+  const g = makeGame();
+
+  g.LEVELS.forEach((level, index) => {
+    assert(typeof level.loreBeat === "string" && level.loreBeat.length > 0, "level " + (index + 1) + " missing lore beat metadata");
+    assert(typeof level.mechanicBeat === "string" && level.mechanicBeat.length > 0, "level " + (index + 1) + " missing mechanic beat metadata");
+    assert(level.reachability && typeof level.reachability.expected === "string", "level " + (index + 1) + " missing reachability expectations");
+
+    g.loadLevel(index);
+    assert(g.activeLevelMetadata.loreBeat === level.loreBeat, "active lore beat was not exposed for level " + (index + 1));
+    assert(g.activeLevelMetadata.mechanicBeat === level.mechanicBeat, "active mechanic beat was not exposed for level " + (index + 1));
+    assert(g.activeLevelMetadata.reachability.expected === level.reachability.expected, "active reachability metadata was not exposed for level " + (index + 1));
+  });
+}
+
 const LEVEL_REACH_LIMITS = {
   normalJumpTiles: 2,
   maxReboundRows: 5,
@@ -3017,6 +3032,7 @@ const tests = [
   ["load level recalculates map", testLoadLevelRecalculatesMap],
   ["authored levels have valid starts", testAuthoredLevelsHaveValidMarkersAndStarts],
   ["playable campaign is redesigned level set", testPlayableCampaignIsRedesignedLevelSet],
+  ["campaign level metadata is exposed", testCampaignLevelMetadataIsExposed],
   ["authored levels are reachable within player limits", testAuthoredLevelsAreReachableWithinPlayerLimits],
   ["Buried Pressure Lock uses five-row pass-through gate", testBuriedPressureLockFiveRowPassThroughGate],
   ["Moonwell Choir contains playable chain stack", testMoonwellChoirContainsPlayableChainStack],
