@@ -2898,10 +2898,10 @@
       probeGrounded();
     }
 
-    function recoverToCheckpoint() {
+    function recoverToCheckpoint(reason) {
       spawnPlayer();
       player.flashTimer = 0.35;
-      player.recoveryCue = "checkpoint";
+      player.recoveryCue = reason || "checkpoint";
       shake = 10;
       spawnRipple(player.x + CONFIG.PLAYER_W / 2, player.y + CONFIG.PLAYER_H / 2, 0.55);
     }
@@ -3290,7 +3290,7 @@
         return;
       }
       if (scannerShouldRecover()) {
-        recoverToCheckpoint();
+        recoverToCheckpoint("scanner");
         clearEdges();
         return;
       }
@@ -3786,13 +3786,18 @@
       return { key: key, label: label, message: message, tone: tone };
     }
 
+    function recoveryMessage() {
+      if (player.recoveryCue === "scanner") return "scanner reset";
+      return "checkpoint " + (activeCheckpoint ? activeCheckpoint.order : 0);
+    }
+
     function presentationState() {
       var levelTitle = (currentLevelIndex + 1) + "/" + LEVELS.length + " " + LEVELS[currentLevelIndex].name;
       if (player.won) {
         return presentation("won", "Unseen", isFinalLevel() ? "mission quiet" : "tap to continue", "#d8b4ff");
       }
-      if (player.recoveryCue === "checkpoint" && player.flashTimer > 0) {
-        return presentation("checkpoint-recovery", "Recovered", "checkpoint " + (activeCheckpoint ? activeCheckpoint.order : 0), "#ffd166");
+      if (player.recoveryCue && player.flashTimer > 0) {
+        return presentation("checkpoint-recovery", "Recovered", recoveryMessage(), "#ffd166");
       }
       if (player.state === "stuck") {
         return presentation("stuck", "Snared", "blocked exit", "#ff5cf4");
@@ -3926,6 +3931,7 @@
       updateCamera: updateCamera,
       renderOnly: renderOnly,
       presentationState: presentationState,
+      recoveryMessage: recoveryMessage,
       spawnPlayer: spawnPlayer,
       step: step,
       clearEdges: clearEdges,

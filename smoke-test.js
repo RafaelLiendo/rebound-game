@@ -2715,7 +2715,7 @@ function testScannerRecoversExposedButNotHiddenPermeation() {
   setPlayer(g, scanner.x + 12, scanner.y + 12, "solid");
   g.player.vx = 1;
   step(g);
-  assert(g.player.recoveryCue === "checkpoint", "exposed scanner contact did not recover to checkpoint");
+  assert(g.player.recoveryCue === "scanner", "exposed scanner contact did not expose scanner recovery");
 
   paintTileBlock(g, 25, 11, 2, 4);
   setPlayer(g, scanner.x + g.CONFIG.TILE_SIZE, (25 * g.CONFIG.TILE_SIZE) + 4, "permeating");
@@ -2723,6 +2723,39 @@ function testScannerRecoversExposedButNotHiddenPermeation() {
   step(g);
   assert(g.player.recoveryCue !== "checkpoint", "scanner punished hidden permeation inside matter");
   assert(g.player.state === "permeating", "hidden scanner permeation did not remain permeating");
+}
+
+function testScannerRecoveryPreservesCheckpointAndControls() {
+  const g = makeGame();
+  pushDynamicFixture(
+    g,
+    { kind: "scanner", name: "training searchlight", char: "L" },
+    { char: "L", c: 14, r: 32, cols: 5, rows: 3 },
+    [
+      { order: 1, c: 8, r: 43 },
+      { order: 2, c: 24, r: 43 }
+    ]
+  );
+  const scanner = g.entities.find((entity) => entity.type === "scanner");
+
+  setPlayer(g, cellX(g, 24), standY(g, 44), "solid");
+  step(g);
+  assert(g.activeCheckpoint.order === 2, "checkpoint 2 was not reached before scanner failure");
+
+  setPlayer(g, scanner.x + 8, scanner.y + 8, "solid");
+  g.player.vx = 1;
+  step(g);
+
+  assert(g.activeCheckpoint.order === 2, "scanner recovery downgraded checkpoint progress");
+  assert(g.player.recoveryCue === "scanner", "scanner recovery did not expose a scanner-specific cue");
+  assert(g.presentationState().message === "scanner reset", "scanner recovery HUD message was not clear");
+  assertNear(g.player.x, cellX(g, 24), "scanner recovery did not respawn at the largest checkpoint x");
+  assertNear(g.player.y, standY(g, 44), "scanner recovery did not respawn at the largest checkpoint y");
+  assert(g.overlappingSolidTiles(g.playerRect()).length === 0, "scanner recovery spawned inside terrain");
+
+  g.setVirtualKey("ArrowRight", true);
+  g.setVirtualKey("ArrowRight", false);
+  assert(g.keys.ArrowRight === false && g.keyReleased.ArrowRight === true, "mobile virtual controls stopped responding after scanner recovery");
 }
 
 function paintRect(rows, c, r, cols, rowCount, ch) {
@@ -3215,6 +3248,7 @@ const tests = [
   ["Wall Claw jump and reset safety", testWallClawJumpAndResetSafety],
   ["scanner fields are authored and nonsolid", testScannerFieldsAreAuthoredAndNonsolid],
   ["scanner recovers exposed but not hidden permeation", testScannerRecoversExposedButNotHiddenPermeation],
+  ["scanner recovery preserves checkpoint and controls", testScannerRecoveryPreservesCheckpointAndControls],
   ["player limit measurements", testPlayerLimitMeasurements],
   ["entity chars normalize geometry", testEntityCharMarkersNormalizeGeometry],
   ["repeated entity chars create clusters", testRepeatedEntityCharCreatesMultipleClusters],
