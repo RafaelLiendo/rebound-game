@@ -990,7 +990,7 @@
       var goal = null;
       (def.entities || []).forEach(function (entity, index) {
         var label = "entity " + (entity.name || index + 1);
-        if (["mover", "asteroid"].indexOf(entity.kind) < 0) {
+        if (["mover", "asteroid", "scanner"].indexOf(entity.kind) < 0) {
           throw new Error(def.name + " " + label + " has unknown kind " + entity.kind + ".");
         }
         if (!entity.char || entity.char.length !== 1 || !isEntityChar(entity.char)) {
@@ -1729,7 +1729,7 @@
       e.prevY = e.y;
       e.dx = 0;
       e.dy = 0;
-      e.solid = true;
+      e.solid = e.type !== "scanner";
       return e;
     }
 
@@ -2970,6 +2970,30 @@
       return false;
     }
 
+    function scannerFieldsOverlapping(rect) {
+      var hits = [];
+      for (var i = 0; i < entities.length; i++) {
+        var e = entities[i];
+        if (e.type === "scanner" && rectsOverlap(rect, entityRect(e))) hits.push(e);
+      }
+      return hits;
+    }
+
+    function hiddenFromScanners() {
+      return player.state === "permeating" && overlappingMatter(playerRect()).length > 0;
+    }
+
+    function playerIsScannerExposed() {
+      if (player.won || hiddenFromScanners()) return false;
+      var moving = Math.abs(player.vx) > 0.05 || Math.abs(player.vy) > 0.05;
+      return moving || player.state === "rebounding" || player.state === "permeating";
+    }
+
+    function scannerShouldRecover() {
+      if (scannerFieldsOverlapping(playerRect()).length === 0) return false;
+      return playerIsScannerExposed();
+    }
+
     function triggerReboundOrStuck(result) {
       if (result.stuck) {
         setStuck();
@@ -3265,6 +3289,11 @@
         clearEdges();
         return;
       }
+      if (scannerShouldRecover()) {
+        recoverToCheckpoint();
+        clearEdges();
+        return;
+      }
 
       if (player.state === "rebounding") {
         if (!player.reboundSurfaced) {
@@ -3522,7 +3551,17 @@
       for (var j = 0; j < entities.length; j++) {
         var e = entities[j];
         ctx.save();
-        if (e.type === "asteroid") {
+        if (e.type === "scanner") {
+          ctx.globalAlpha = 0.22 + 0.08 * Math.sin(levelTime * 4 + j);
+          ctx.fillStyle = "rgba(255, 209, 102, 0.55)";
+          ctx.fillRect(e.x, e.y, e.w, e.h);
+          ctx.globalAlpha = 0.74;
+          ctx.strokeStyle = "#ffd166";
+          ctx.lineWidth = 2;
+          ctx.setLineDash([10, 8]);
+          roundRect(e.x + 2, e.y + 2, e.w - 4, e.h - 4, 6);
+          ctx.stroke();
+        } else if (e.type === "asteroid") {
           if (e.warningActive) {
             ctx.globalAlpha = 0.2 + 0.18 * Math.sin(levelTime * 18 + j);
             ctx.fillStyle = "#ff5cf4";
@@ -3902,6 +3941,9 @@
       bottomHalfOverlapsSolid: bottomHalfOverlapsSolid,
       bottomHalfFullyInsideMatter: bottomHalfFullyInsideMatter,
       ceilingHangInfo: ceilingHangInfo,
+      scannerFieldsOverlapping: scannerFieldsOverlapping,
+      playerIsScannerExposed: playerIsScannerExposed,
+      scannerShouldRecover: scannerShouldRecover,
       passThroughTargetFallTiles: passThroughTargetFallTiles,
       permeationEntryWork: permeationEntryWork,
       contiguousMassExtents: contiguousMassExtents,

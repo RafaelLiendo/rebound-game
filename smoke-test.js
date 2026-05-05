@@ -2684,6 +2684,47 @@ function testWallClawJumpAndResetSafety() {
   assert(g.overlappingSolidTiles(g.playerRect()).length === 0, "reset during Wall Claw spawned inside terrain");
 }
 
+function testScannerFieldsAreAuthoredAndNonsolid() {
+  const g = makeGame();
+  pushDynamicFixture(
+    g,
+    { kind: "scanner", name: "training searchlight", char: "L" },
+    { char: "L", c: 10, r: 26, cols: 5, rows: 4 }
+  );
+
+  const scanner = g.entities.find((entity) => entity.type === "scanner");
+  assert(scanner, "scanner marker did not create a runtime scanner field");
+  assert(scanner.solid === false, "scanner field should not be solid matter");
+  assert(scanner.x === 10 * g.CONFIG.TILE_SIZE && scanner.y === 26 * g.CONFIG.TILE_SIZE, "scanner field geometry was not map-authored");
+
+  setPlayer(g, scanner.x + 8, scanner.y + 8, "solid");
+  g.player.vx = 2;
+  step(g);
+  assert(g.overlappingSolidEntities(g.playerRect()).length === 0, "scanner field blocked collision as a solid entity");
+}
+
+function testScannerRecoversExposedButNotHiddenPermeation() {
+  const g = makeGame();
+  pushDynamicFixture(
+    g,
+    { kind: "scanner", name: "training searchlight", char: "L" },
+    { char: "L", c: 10, r: 24, cols: 6, rows: 5 }
+  );
+  const scanner = g.entities.find((entity) => entity.type === "scanner");
+
+  setPlayer(g, scanner.x + 12, scanner.y + 12, "solid");
+  g.player.vx = 1;
+  step(g);
+  assert(g.player.recoveryCue === "checkpoint", "exposed scanner contact did not recover to checkpoint");
+
+  paintTileBlock(g, 25, 11, 2, 4);
+  setPlayer(g, scanner.x + g.CONFIG.TILE_SIZE, (25 * g.CONFIG.TILE_SIZE) + 4, "permeating");
+  g.keys.ShiftLeft = true;
+  step(g);
+  assert(g.player.recoveryCue !== "checkpoint", "scanner punished hidden permeation inside matter");
+  assert(g.player.state === "permeating", "hidden scanner permeation did not remain permeating");
+}
+
 function paintRect(rows, c, r, cols, rowCount, ch) {
   for (let rr = r; rr < r + rowCount; rr++) {
     for (let cc = c; cc < c + cols; cc++) rows[rr][cc] = ch;
@@ -3172,6 +3213,8 @@ const tests = [
   ["Open Claw presentation states are readable", testOpenClawPresentationStatesAreReadable],
   ["Wall Claw clings only while airborne", testWallClawClingsOnlyWhileAirborne],
   ["Wall Claw jump and reset safety", testWallClawJumpAndResetSafety],
+  ["scanner fields are authored and nonsolid", testScannerFieldsAreAuthoredAndNonsolid],
+  ["scanner recovers exposed but not hidden permeation", testScannerRecoversExposedButNotHiddenPermeation],
   ["player limit measurements", testPlayerLimitMeasurements],
   ["entity chars normalize geometry", testEntityCharMarkersNormalizeGeometry],
   ["repeated entity chars create clusters", testRepeatedEntityCharCreatesMultipleClusters],
