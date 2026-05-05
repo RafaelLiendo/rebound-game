@@ -11,8 +11,8 @@ matter, and release from depth to rebound upward.
 
 Supporting notes:
 
-- `Plan.md` describes the intended game feel, state machine, controls, and
-  behavior validations.
+- `Plan.md` describes the intended game feel, campaign teaching beats, state
+  machine, controls, and behavior validations.
 - `Lore.md` describes the larger Shadow Cats / Open Claw fantasy. Treat it as
   useful direction for theme, naming, and future expansion.
 - `smoke-test.js` is the lightweight Node-based regression suite.
