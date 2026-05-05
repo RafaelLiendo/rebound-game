@@ -335,6 +335,28 @@ function testTapFinalCompletionPromptRestartsCheckpoint() {
   assert(g.activeCheckpoint.order === 0, "final tap completion reset checkpoint progress incorrectly");
 }
 
+function testStoryCompletionPromptAndRestartFlow() {
+  const g = makeGame();
+  assert(g.LEVELS.every((level) => level.name.length <= 18), "campaign level titles should stay concise");
+
+  completeCurrentLevel(g);
+  let prompt = g.completionPrompt();
+  assert(prompt.title === "Route Silent", "non-final completion title does not fit Shadow Cats tone");
+  assert(prompt.action === "Tap to continue", "non-final completion action changed");
+  assert(g.activateCompletionPrompt() === true, "non-final story prompt did not advance");
+  assert(g.currentLevelIndex === 1, "story prompt did not advance to the next level");
+
+  const finalIndex = g.LEVELS.length - 1;
+  g.loadLevel(finalIndex);
+  completeCurrentLevel(g);
+  prompt = g.completionPrompt();
+  assert(prompt.title === "Signal Severed", "final completion title did not resolve the Signal Crown story");
+  assert(prompt.action === "Tap to checkpoint", "final completion action changed");
+  assert(g.activateCompletionPrompt() === true, "final story prompt did not restart");
+  assert(g.currentLevelIndex === finalIndex, "final story prompt changed levels");
+  assert(g.player.won === false && g.player.state === "solid", "final story prompt did not restore playable state");
+}
+
 function scratchRows(rowCount = 50, colCount = 70) {
   const rows = Array.from({ length: rowCount }, () => Array(colCount).fill("."));
   rows[1][colCount - 2] = "@";
@@ -962,11 +984,14 @@ function testCampaignLevelMetadataIsExposed() {
   const g = makeGame();
 
   g.LEVELS.forEach((level, index) => {
+    assert(typeof level.actTitle === "string" && level.actTitle.length > 0, "level " + (index + 1) + " missing act title metadata");
+    assert(level.actTitle.length <= 22, "level " + (index + 1) + " act title is too long");
     assert(typeof level.loreBeat === "string" && level.loreBeat.length > 0, "level " + (index + 1) + " missing lore beat metadata");
     assert(typeof level.mechanicBeat === "string" && level.mechanicBeat.length > 0, "level " + (index + 1) + " missing mechanic beat metadata");
     assert(level.reachability && typeof level.reachability.expected === "string", "level " + (index + 1) + " missing reachability expectations");
 
     g.loadLevel(index);
+    assert(g.activeLevelMetadata.actTitle === level.actTitle, "active act title was not exposed for level " + (index + 1));
     assert(g.activeLevelMetadata.loreBeat === level.loreBeat, "active lore beat was not exposed for level " + (index + 1));
     assert(g.activeLevelMetadata.mechanicBeat === level.mechanicBeat, "active mechanic beat was not exposed for level " + (index + 1));
     assert(g.activeLevelMetadata.reachability.expected === level.reachability.expected, "active reachability metadata was not exposed for level " + (index + 1));
@@ -3250,6 +3275,7 @@ const tests = [
   ["mobile releaseAll clears held virtual keys", testMobileReleaseAllClearsHeldVirtualKeys],
   ["tap completion prompt advances level", testTapCompletionPromptAdvancesLevel],
   ["tap final completion prompt restarts checkpoint", testTapFinalCompletionPromptRestartsCheckpoint],
+  ["story completion prompt and restart flow", testStoryCompletionPromptAndRestartFlow],
   ["load level recalculates map", testLoadLevelRecalculatesMap],
   ["authored levels have valid starts", testAuthoredLevelsHaveValidMarkersAndStarts],
   ["playable campaign is redesigned level set", testPlayableCampaignIsRedesignedLevelSet],

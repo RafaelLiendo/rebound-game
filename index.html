@@ -1053,6 +1053,7 @@
     function normalizeLevelMetadata(def) {
       var reachability = def.reachability || {};
       return {
+        actTitle: def.actTitle || "",
         loreBeat: def.loreBeat || "",
         mechanicBeat: def.mechanicBeat || "",
         reachability: {
@@ -1064,6 +1065,7 @@
     function levelMetadata(level) {
       return {
         name: level.name,
+        actTitle: level.actTitle,
         loreBeat: level.loreBeat,
         mechanicBeat: level.mechanicBeat,
         reachability: {
@@ -1077,6 +1079,7 @@
       var metadata = normalizeLevelMetadata(def);
       return {
         name: def.name,
+        actTitle: metadata.actTitle,
         loreBeat: metadata.loreBeat,
         mechanicBeat: metadata.mechanicBeat,
         reachability: metadata.reachability,
@@ -1091,6 +1094,7 @@
     var LEVELS = [
       defineLevel({
         name: "Hidden Base",
+        actTitle: "Trial Below",
         loreBeat: "The Next Shadow begins the final Open Claw trial in the buried clan sanctuary.",
         mechanicBeat: "Open Claw movement, thin-surface shadow sink, and first safe recovery.",
         reachability: { expected: "Normal jumps, Wall Claw confidence, and thin-floor permeation introduce the route." },
@@ -1141,6 +1145,7 @@
       }),      
       defineLevel({
         name: "Buried Tunnels",
+        actTitle: "Trial Below",
         loreBeat: "Old escape tunnels below the city teach that shadowed stone can be a door.",
         mechanicBeat: "Committed pass-through dive through a five-row pressure seal.",
         reachability: { expected: "A high fall must satisfy the 2x+1 pass-through entry target." },
@@ -1195,6 +1200,7 @@
       }),
       defineLevel({
         name: "Occupied Streets",
+        actTitle: "City Under Watch",
         loreBeat: "The first alien patrol lanes force the Shadow Cat to move unseen through the city.",
         mechanicBeat: "Stealth pressure and manual or assisted shallow rebound chain timing.",
         reachability: { expected: "Stacked one- and two-row gaps are chain-rebound reachable." },
@@ -1261,6 +1267,7 @@
       }),
       defineLevel({
         name: "Rooftop District",
+        actTitle: "City Under Watch",
         loreBeat: "The route climbs from watched streets onto rooftops under alien scanlight.",
         mechanicBeat: "Top-half ceiling hang, Space pull, assisted delayed rebound, and exposed-route patience.",
         reachability: { expected: "Two- and three-row hang gaps stay within measured jump reach." },
@@ -1313,6 +1320,7 @@
       }),
       defineLevel({
         name: "Skyline Spire",
+        actTitle: "Learning to Rise",
         loreBeat: "The failed boarding attempt forces the Open Claw to turn depth into height.",
         mechanicBeat: "First true deep rebound, five-row cap, and boosted horizontal shaping.",
         reachability: { expected: "Rebound gaps stay within the five-row boosted reach table." },
@@ -1369,6 +1377,7 @@
       }),
       defineLevel({
         name: "Outer Hulls",
+        actTitle: "Silent Fleet",
         loreBeat: "The Shadow Cat crosses the nearest ship's outer hull on shifting maintenance platforms.",
         mechanicBeat: "Moving platforms, dynamic rebound masses, hazards, and checkpoint pacing.",
         reachability: { expected: "Mover surfaces bridge safe gaps without fake scaffold terrain." },
@@ -1446,6 +1455,7 @@
       }),
       defineLevel({
         name: "Fleet Bridges",
+        actTitle: "Silent Fleet",
         loreBeat: "Between ships, silence depends on chaining through short windows of shadow.",
         mechanicBeat: "Chain rebound through exposed fleet gaps and moving matter.",
         reachability: { expected: "The route uses authored chain slabs and a moving mass within audit limits." },
@@ -1527,6 +1537,7 @@
       }),
       defineLevel({
         name: "Command Vessel",
+        actTitle: "Command Vessel",
         loreBeat: "The Next Shadow reaches the Signal Crown's command vessel to sever the fleet order unseen.",
         mechanicBeat: "Final remix of rebound, moving matter, hazards, scanners, and silent passage.",
         reachability: { expected: "All final gaps are reachable by measured rebound, mover, and checkpoint rules." },
@@ -2177,6 +2188,14 @@
       }
       clearEdges();
       return true;
+    }
+
+    function completionPrompt() {
+      var final = isFinalLevel();
+      return {
+        title: final ? "Signal Severed" : "Route Silent",
+        action: final ? "Tap to checkpoint" : "Tap to continue"
+      };
     }
 
     // === PHYSICS HELPERS ===
@@ -3832,7 +3851,7 @@
     }
 
     function drawWin() {
-      var final = isFinalLevel();
+      var prompt = completionPrompt();
       ctx.fillStyle = "rgba(4, 5, 16, 0.72)";
       ctx.fillRect(0, 0, CONFIG.VIEW_W, CONFIG.VIEW_H);
       ctx.fillStyle = "#d8b4ff";
@@ -3840,11 +3859,11 @@
       ctx.textAlign = "center";
       ctx.shadowColor = "#ff5cf4";
       ctx.shadowBlur = 18;
-      ctx.fillText(final ? "All Rifts Stabilized" : "Rift Complete", CONFIG.VIEW_W / 2, CONFIG.VIEW_H / 2 - 12);
+      ctx.fillText(prompt.title, CONFIG.VIEW_W / 2, CONFIG.VIEW_H / 2 - 12);
       ctx.shadowBlur = 0;
       ctx.fillStyle = "#f6f3ff";
       ctx.font = "18px ui-sans-serif, system-ui";
-      ctx.fillText(final ? "Tap to checkpoint" : "Tap to continue", CONFIG.VIEW_W / 2, CONFIG.VIEW_H / 2 + 30);
+      ctx.fillText(prompt.action, CONFIG.VIEW_W / 2, CONFIG.VIEW_H / 2 + 30);
       ctx.textAlign = "left";
     }
 
@@ -3920,6 +3939,7 @@
       loadLevel: loadLevel,
       nextLevel: nextLevel,
       activateCompletionPrompt: activateCompletionPrompt,
+      completionPrompt: completionPrompt,
       detectTouchMode: detectTouchMode,
       detectIOS: detectIOS,
       isStandaloneWebApp: isStandaloneWebApp,
